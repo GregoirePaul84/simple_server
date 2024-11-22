@@ -120,10 +120,10 @@ app.post('/webhook', async (req, res) => {
         } else if (action === 'sell') {
 
             // Vérification qu'une position longue existe
-            if (!hasOpenLongPosition) {
-                console.error('Pas de position longue ouverte. Vente non autorisée.');
-                return res.status(400).send('Pas de position longue ouverte.');
-            }
+            // if (!hasOpenLongPosition) {
+            //     console.error('Pas de position longue ouverte. Vente non autorisée.');
+            //     return res.status(400).send('Pas de position longue ouverte.');
+            // }
 
             // // Vérification du solde BTC pour une vente
             // if (btcBalance <= 0) {
@@ -135,6 +135,9 @@ app.post('/webhook', async (req, res) => {
             // const order = await binance.marketSell(symbol, quantityToSell);
             // console.log('Ordre de vente effectué :', order);
 
+            // POUR LE TEST
+            lastBuyPrice = 93000;
+            
             if (lastBuyPrice) {
                 const profit = ((price - lastBuyPrice) * quantityToSell).toFixed(2); // Gain ou perte en USDT
                 const profitPercentage = (((price - lastBuyPrice) / lastBuyPrice) * 100).toFixed(2); // Le pourcentage de gain ou perte
