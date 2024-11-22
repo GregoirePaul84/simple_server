@@ -109,7 +109,7 @@ app.post('/webhook', async (req, res) => {
             res.status(200).send('Ordre d\'achat exécuté avec succès !');
         } else if (action === 'sell') {
             // TEST BOT
-            lastBuyPrice = 93000;
+            lastBuyPrice = 100000;
 
             if (lastBuyPrice) {
                 const profit = ((price - lastBuyPrice) * 0.001696).toFixed(2);
@@ -130,7 +130,7 @@ app.post('/webhook', async (req, res) => {
                         `- Gain réalisé 💶 : ${profit} USDT\n` +
                         `- Pourcentage réalisé 📊 : ${profitPercentage} %\n\n` +
                         `- Gains totaux 💰 : ${totalProfit.toFixed(2)} USDT, ${totalProfitPercentage} %\n\n` +
-                        `- Capital disponible 💎 : ${usdtBalance} USDT` +
+                        `- Capital disponible 💎 : ${usdtBalance} USDT\n` +
                         `💪 ${getGainMessage()}`
                     );
                 } else {
@@ -140,7 +140,7 @@ app.post('/webhook', async (req, res) => {
                         `- Symbole : BTC / USDT\n` +
                         `- Perte réalisée 💩 : -${Math.abs(profit)} USDT\n` +
                         `- Pourcentage réalisé 📊 : -${profitPercentage} %\n\n` +
-                        `- Capital disponible 💎 : ${usdtBalance} USDT` +
+                        `- Capital disponible 💎 : ${usdtBalance} USDT\n` +
                         `🧘 ${getLossMessage()}`
                     );
                 }
