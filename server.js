@@ -47,6 +47,14 @@ app.get('/', (_, res) => {
     res.send('Le serveur fonctionne correctement !');
 });
 
+// Test du compte rendu mensuel
+app.get('/test-monthly-report', (_, res) => {
+    // Appel direct à la fonction pour générer un rapport
+    sendMonthlyReport(bot, chatId, totalProfitCumulative, initialCapital, totalProfitMonthly);
+    res.status(200).send('Rapport mensuel envoyé (test).');
+});
+
+
 // Endpoint pour récupérer le solde
 app.get('/balance', async (_, res) => {
     try {
@@ -137,7 +145,7 @@ app.post('/webhook', async (req, res) => {
 
             // POUR LE TEST
             lastBuyPrice = 93000;
-            
+
             if (lastBuyPrice) {
                 const profit = ((price - lastBuyPrice) * quantityToSell).toFixed(2); // Gain ou perte en USDT
                 const profitPercentage = (((price - lastBuyPrice) / lastBuyPrice) * 100).toFixed(2); // Le pourcentage de gain ou perte
@@ -193,13 +201,6 @@ app.post('/webhook', async (req, res) => {
 // Lancer le serveur
 app.listen(port, () => {
     console.log(`Serveur en cours d'exécution sur ${externalURL}`);
-});
-
-// Test du compte rendu mensuel
-app.get('/test-monthly-report', (_, res) => {
-    // Appel direct à la fonction pour générer un rapport
-    sendMonthlyReport(bot, chatId, totalProfitCumulative, initialCapital, totalProfitMonthly);
-    res.status(200).send('Rapport mensuel envoyé (test).');
 });
 
 // Planification du rapport mensuel
