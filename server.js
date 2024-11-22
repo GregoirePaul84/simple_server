@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const Binance = require('node-binance-api');
 const TelegramBot = require('node-telegram-bot-api');
 const { getGainMessage, getLossMessage } = require('./botmessages');
+const { scheduleMonthlyReport, sendMonthlyReport } = require('./monthlyReport'); // Import du fichier pour le rapport mensuel
 
 // Configuration de Telegram
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
@@ -28,13 +29,21 @@ const binance = new Binance().options({
     verbose: true, // Affiche les logs pour aider au débogage
 });
 
-// Variable pour stocker le prix d'achat et calculer le gain / perte
+// Variables de base
+let hasOpenLongPosition = false; // Position longue en cours ou non
 let lastBuyPrice = null; // Dernier prix d'achat
-let totalProfit = 0; // Gains totaux accumulés
+let totalProfitCumulative = 0; // Total depuis le début
+let totalProfitMonthly = 0; // Total du mois en cours
 const initialCapital = 100; // Capital initial en USDT
 
+// Setter pour réinitialiser les profits mensuels
+const resetMonthlyProfit = () => {
+    totalProfitMonthly = 0;
+    console.log('Profit mensuel réinitialisé.');
+};
+
 // Route pour tester la connexion
-app.get('/', (req, res) => {
+app.get('/', (_, res) => {
     res.send('Le serveur fonctionne correctement !');
 });
 
@@ -88,16 +97,17 @@ app.post('/webhook', async (req, res) => {
         const quantityToSell = btcBalance.toFixed(6);
 
         if (action === 'buy') {
-            // Vérification du solde USDT pour un achat
-            if (usdtBalance <= 0) {
-                console.error('Solde insuffisant en USDT pour acheter.');
-                return res.status(400).send('Solde USDT insuffisant.');
-            }
+            // // Vérification du solde USDT pour un achat
+            // if (usdtBalance <= 0) {
+            //     console.error('Solde insuffisant en USDT pour acheter.');
+            //     return res.status(400).send('Solde USDT insuffisant.');
+            // }
 
-            // Exécution de l'ordre d'achat
-            const order = await binance.marketBuy(symbol, quantityToBuy);
-            console.log('Ordre d\'achat effectué :', order);
+            // // Exécution de l'ordre d'achat
+            // const order = await binance.marketBuy(symbol, quantityToBuy);
+            // console.log('Ordre d\'achat effectué :', order);
 
+            hasOpenLongPosition = true; // Confirme qu'une position longue a été prise
             lastBuyPrice = price; // Enregistrement du prix d'achat
 
             // Envoi de notification Telegram
@@ -108,19 +118,32 @@ app.post('/webhook', async (req, res) => {
 
             res.status(200).send('Ordre d\'achat exécuté avec succès !');
         } else if (action === 'sell') {
-            // TEST BOT
-            lastBuyPrice = 100000;
+
+            // Vérification qu'une position longue existe
+            if (!hasOpenLongPosition) {
+                console.error('Pas de position longue ouverte. Vente non autorisée.');
+                return res.status(400).send('Pas de position longue ouverte.');
+            }
+
+            // // Vérification du solde BTC pour une vente
+            // if (btcBalance <= 0) {
+            //     console.error('Solde insuffisant en BTC pour vendre.');
+            //     return res.status(400).send('Solde BTC insuffisant.');
+            // }
+
+            // // Exécution de l'ordre de vente
+            // const order = await binance.marketSell(symbol, quantityToSell);
+            // console.log('Ordre de vente effectué :', order);
 
             if (lastBuyPrice) {
-                const profit = ((price - lastBuyPrice) * 0.001696).toFixed(2);
-                const profitPercentage = (((price - lastBuyPrice) / lastBuyPrice) * 100).toFixed(2);
+                const profit = ((price - lastBuyPrice) * quantityToSell).toFixed(2); // Gain ou perte en USDT
+                const profitPercentage = (((price - lastBuyPrice) / lastBuyPrice) * 100).toFixed(2); // Le pourcentage de gain ou perte
 
-                // Mise à jour des gains totaux
-                totalProfit += parseFloat(profit);
-                const totalProfitPercentage = ((totalProfit / initialCapital) * 100).toFixed(2);
+                totalProfitCumulative += parseFloat(profit); // Mise à jour du profit total
+                totalProfitMonthly += parseFloat(profit); // Mise à jour du profit mensuel
 
-                const accountInfo = await binance.balance(); // Récupère le solde complet
-                const usdtBalance = accountInfo.USDT.available; // Solde USDT disponible
+                const totalProfitCumulativePercentage = ((totalProfitCumulative / initialCapital) * 100).toFixed(2); // Pourcentage depuis le début
+                const totalProfitMonthlyPercentage = ((totalProfitMonthly / initialCapital) * 100).toFixed(2);
 
                 if (profit >= 0) {
                     bot.sendMessage(
@@ -129,8 +152,9 @@ app.post('/webhook', async (req, res) => {
                         `- Symbole : BTC / USDT\n` +
                         `- Gain réalisé 💶 : ${profit} USDT\n` +
                         `- Pourcentage réalisé 📊 : ${profitPercentage} %\n\n` +
-                        `- Gains totaux 💰 : ${totalProfit.toFixed(2)} USDT, ${totalProfitPercentage} %\n\n` +
-                        `- Capital disponible 💎 : ${usdtBalance} USDT\n` +
+                        `- Gains mensuels 💰 : ${totalProfitMonthly.toFixed(2)} USDT, ${totalProfitMonthlyPercentage} %\n` +
+                        `- Gains totaux 💰💰 : ${totalProfitCumulative.toFixed(2)} USDT, ${totalProfitCumulativePercentage} %\n\n` +
+                        `- Capital disponible 💎 : ${usdtBalance} USDT\n\n` +
                         `💪 ${getGainMessage()}`
                     );
                 } else {
@@ -139,34 +163,16 @@ app.post('/webhook', async (req, res) => {
                         `✅ Ordre de vente exécuté : Pas payé. 💩\n\n` +
                         `- Symbole : BTC / USDT\n` +
                         `- Perte réalisée 💩 : -${Math.abs(profit)} USDT\n` +
-                        `- Pourcentage réalisé 📊 : -${profitPercentage} %\n\n` +
-                        `- Capital disponible 💎 : ${usdtBalance} USDT\n` +
+                        `- Pourcentage réalisé 📊 : ${profitPercentage} %\n\n` +
+                        `- Gains mensuels 💰 : ${totalProfitMonthly.toFixed(2)} USDT, ${totalProfitMonthlyPercentage} %\n` +
+                        `- Gains totaux 💰💰 : ${totalProfitCumulative.toFixed(2)} USDT, ${totalProfitCumulativePercentage} %\n\n` +
+                        `- Capital disponible 💎 : ${usdtBalance} USDT\n\n` +
                         `🧘 ${getLossMessage()}`
                     );
                 }
             } else {
                 bot.sendMessage(chatId, `⚠️ Impossible de calculer les gains ou pertes : Dernier prix d'achat inconnu.`);
             }
-
-            // Vérification du solde BTC pour une vente
-            if (btcBalance <= 0) {
-                console.error('Solde insuffisant en BTC pour vendre.');
-                return res.status(400).send('Solde BTC insuffisant.');
-            }
-
-            // Exécution de l'ordre de vente
-            const order = await binance.marketSell(symbol, quantityToSell);
-            console.log('Ordre de vente effectué :', order);
-
-            // // Calcul des gains ou pertes
-            // const profitOrLoss = ((price - lastBuyPrice) * btcBalance).toFixed(2);
-            // const profitOrLossPercentage = (((price - lastBuyPrice) / lastBuyPrice) * 100).toFixed(2);
-
-            // // Notification Telegram
-            // bot.sendMessage(
-            //     chatId,
-            //     `✅ Ordre de vente exécuté :\n- Symbole : ${symbol}\n- Quantité : ${quantityToSell}\n- Prix : ${price} USDT\n📊 Résultat du trade : ${profitOrLoss} USDT (${profitOrLossPercentage}%)`
-            // );
 
             res.status(200).send('Ordre de vente exécuté avec succès !');
         }
@@ -185,3 +191,13 @@ app.post('/webhook', async (req, res) => {
 app.listen(port, () => {
     console.log(`Serveur en cours d'exécution sur ${externalURL}`);
 });
+
+// Test du compte rendu mensuel
+app.get('/test-monthly-report', (_, res) => {
+    // Appel direct à la fonction pour générer un rapport
+    sendMonthlyReport(bot, chatId, totalProfitCumulative, initialCapital, totalProfitMonthly);
+    res.status(200).send('Rapport mensuel envoyé (test).');
+});
+
+// Planification du rapport mensuel
+scheduleMonthlyReport(bot, chatId, () => totalProfitCumulative, () => totalProfitMonthly, resetMonthlyProfit);

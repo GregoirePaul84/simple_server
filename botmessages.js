@@ -1,4 +1,4 @@
-export const getLossMessage = () => {
+const getLossMessage = () => {
     const messages = [
         "La rivière perce le rocher non par sa force, mais par sa persévérance. 💦",
         "Chaque perte est une leçon, et chaque leçon te rapproche du succès. 📚",
@@ -10,9 +10,9 @@ export const getLossMessage = () => {
         "Même les plus grandes montagnes se gravissent un pas à la fois. 🏔️",
     ];
     return messages[Math.floor(Math.random() * messages.length)];
-}
+};
 
-export const getGainMessage = () => {
+const getGainMessage = () => {
     const messages = [
         "Quand on est chaud, on est chaud ! 🔥💰",
         "Il paraît que l’argent ne fait pas le bonheur… mais on peut toujours essayer, non ? 😏💵",
@@ -27,3 +27,5 @@ export const getGainMessage = () => {
     ];
     return messages[Math.floor(Math.random() * messages.length)];
 };
+
+module.exports = { getLossMessage, getGainMessage };
