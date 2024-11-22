@@ -2,6 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const Binance = require('node-binance-api');
+const TelegramBot = require('node-telegram-bot-api');
+
+// Configuration de Telegram
+const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
+const chatId = process.env.TELEGRAM_CHAT_ID;
 
 const externalURL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`;
 
@@ -21,6 +26,9 @@ const binance = new Binance().options({
     reconnect: true, // Permet de se reconnecter automatiquement
     verbose: true, // Affiche les logs pour aider au débogage
 });
+
+// Variable pour stocker le prix d'achat et calculer le gain / perte
+let lastBuyPrice = null;
 
 // Route pour tester la connexion
 app.get('/', (req, res) => {
@@ -86,8 +94,34 @@ app.post('/webhook', async (req, res) => {
             // Exécution de l'ordre d'achat
             const order = await binance.marketBuy(symbol, quantityToBuy);
             console.log('Ordre d\'achat effectué :', order);
+
+            lastBuyPrice = price; // Enregistrement du prix d'achat
+
+            // Envoi de notification Telegram
+            bot.sendMessage(
+                chatId,
+                `✅ Ordre d'achat exécuté :\n- Symbole : ${symbol}\n- Quantité : ${quantity}\n- Prix : ${price} USDT`
+            );
+
             res.status(200).send('Ordre d\'achat exécuté avec succès !');
         } else if (action === 'sell') {
+            // TEST BOT
+            // Calcul des gains ou pertes
+            const profitOrLoss = ((price - 91300) * 100).toFixed(2);
+            const profitOrLossPercentage = (((price - 91300) / 91300) * 100).toFixed(2);
+
+            console.log('Ordre de vente effectué :', order);
+
+            // Notification Telegram
+            bot.sendMessage(
+                chatId,
+                `✅ Ordre de vente exécuté :\n
+                - Symbole : ${symbol}\n
+                - Quantité : ${quantityToSell}\n- 
+                Prix : ${price} USDT\n
+                📊 Résultat du trade : ${profitOrLoss} USDT (${profitOrLossPercentage}%)`
+            );
+
             // Vérification du solde BTC pour une vente
             if (btcBalance <= 0) {
                 console.error('Solde insuffisant en BTC pour vendre.');
@@ -97,10 +131,27 @@ app.post('/webhook', async (req, res) => {
             // Exécution de l'ordre de vente
             const order = await binance.marketSell(symbol, quantityToSell);
             console.log('Ordre de vente effectué :', order);
+
+            // // Calcul des gains ou pertes
+            // const profitOrLoss = ((price - lastBuyPrice) * btcBalance).toFixed(2);
+            // const profitOrLossPercentage = (((price - lastBuyPrice) / lastBuyPrice) * 100).toFixed(2);
+
+            // console.log('Ordre de vente effectué :', order);
+
+            // // Notification Telegram
+            // bot.sendMessage(
+            //     chatId,
+            //     `✅ Ordre de vente exécuté :\n- Symbole : ${symbol}\n- Quantité : ${quantityToSell}\n- Prix : ${price} USDT\n📊 Résultat du trade : ${profitOrLoss} USDT (${profitOrLossPercentage}%)`
+            // );
+
             res.status(200).send('Ordre de vente exécuté avec succès !');
         }
     } catch (error) {
         console.error('Erreur lors de l\'exécution de l\'ordre :', error);
+
+        // Notification d'erreur à Telegram
+        bot.sendMessage(chatId, `❌ Erreur lors de l'exécution de l'ordre : ${error.message}`);
+        
         res.status(500).send('Erreur lors de l\'exécution de l\'ordre.');
     }
 });
