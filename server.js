@@ -119,6 +119,9 @@ app.post('/webhook', async (req, res) => {
                 totalProfit += parseFloat(profit);
                 const totalProfitPercentage = ((totalProfit / initialCapital) * 100).toFixed(2);
 
+                const accountInfo = await binance.balance(); // Récupère le solde complet
+                const usdtBalance = accountInfo.USDT.available; // Solde USDT disponible
+
                 if (profit >= 0) {
                     bot.sendMessage(
                         chatId,
@@ -126,7 +129,8 @@ app.post('/webhook', async (req, res) => {
                         `- Symbole : BTC / USDT\n` +
                         `- Gain réalisé 💶 : ${profit} USDT\n` +
                         `- Pourcentage réalisé 📊 : ${profitPercentage} %\n\n` +
-                        `- Gains totaux 💶💶💶 : ${totalProfit.toFixed(2)} USDT, ${totalProfitPercentage} %\n\n` +
+                        `- Gains totaux 💰 : ${totalProfit.toFixed(2)} USDT, ${totalProfitPercentage} %\n\n` +
+                        `- Capital disponible 💎 : ${usdtBalance} USDT` +
                         `💪 ${getGainMessage()}`
                     );
                 } else {
@@ -134,9 +138,9 @@ app.post('/webhook', async (req, res) => {
                         chatId,
                         `✅ Ordre de vente exécuté : Pas payé. 💩\n\n` +
                         `- Symbole : BTC / USDT\n` +
-                        `- Perte réalisée 💩 : ${Math.abs(profit)} USDT\n` +
-                        `- Pourcentage réalisé 📊 : ${profitPercentage} %\n\n` +
-                        `- Gains totaux 💶💶💶 : ${totalProfit.toFixed(2)} USDT, ${totalProfitPercentage} %\n\n` +
+                        `- Perte réalisée 💩 : -${Math.abs(profit)} USDT\n` +
+                        `- Pourcentage réalisé 📊 : -${profitPercentage} %\n\n` +
+                        `- Capital disponible 💎 : ${usdtBalance} USDT` +
                         `🧘 ${getLossMessage()}`
                     );
                 }
