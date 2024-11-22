@@ -7,6 +7,10 @@ const port = 3000;
 // Middleware pour traiter les JSON reçus
 app.use(bodyParser.json());
 
+app.get('/', (req, res) => {
+    res.send('Le serveur fonctionne correctement !');
+});
+
 // Endpoint Webhook pour recevoir les alertes
 app.post('/webhook', (req, res) => {
     const alert = req.body;
