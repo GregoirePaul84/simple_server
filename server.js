@@ -110,8 +110,6 @@ app.post('/webhook', async (req, res) => {
             const profitOrLoss = ((price - 91300) * 100).toFixed(2);
             const profitOrLossPercentage = (((price - 91300) / 91300) * 100).toFixed(2);
 
-            console.log('Ordre de vente effectué :', order);
-
             // Notification Telegram
             bot.sendMessage(
                 chatId,
@@ -135,8 +133,6 @@ app.post('/webhook', async (req, res) => {
             // // Calcul des gains ou pertes
             // const profitOrLoss = ((price - lastBuyPrice) * btcBalance).toFixed(2);
             // const profitOrLossPercentage = (((price - lastBuyPrice) / lastBuyPrice) * 100).toFixed(2);
-
-            // console.log('Ordre de vente effectué :', order);
 
             // // Notification Telegram
             // bot.sendMessage(
