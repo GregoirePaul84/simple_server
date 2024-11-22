@@ -14,8 +14,12 @@ app.use(bodyParser.json());
 
 // Configuration de Binance API
 const binance = new Binance().options({
-    APIKEY: process.env.BINANCE_API_KEY, 
-    APISECRET: process.env.BINANCE_API_SECRET,
+    APIKEY: process.env.BINANCE_API_KEY, // Clé API Binance
+    APISECRET: process.env.BINANCE_API_SECRET, // Clé secrète Binance
+    family: 4, // Forcer l'utilisation d'IPv4
+    useServerTime: true, // Synchronisation avec l'heure du serveur Binance
+    reconnect: true, // Permet de se reconnecter automatiquement
+    verbose: true, // Affiche les logs pour aider au débogage
 });
 
 // Route pour tester la connexion
@@ -27,13 +31,15 @@ app.get('/', (req, res) => {
 app.get('/balance', async (_, res) => {
     try {
         const accountInfo = await binance.balance(); // Récupère le solde complet
+        // console.log('info compte =>', accountInfo);
+        
         const usdtBalance = accountInfo.USDT.available; // Solde USDT disponible
         res.status(200).json({
             message: 'Solde récupéré avec succès',
             usdtBalance,
         });
     } catch (error) {
-        console.error('Erreur lors de la récupération du solde :', error);
+        console.error('Erreur lors de la récupération du solde :');
         res.status(500).json({ error: 'Impossible de récupérer le solde' });
     }
 });
