@@ -28,7 +28,9 @@ const binance = new Binance().options({
 });
 
 // Variable pour stocker le prix d'achat et calculer le gain / perte
-let lastBuyPrice = null;
+let lastBuyPrice = null; // Dernier prix d'achat
+let totalProfit = 0; // Gains totaux accumulés
+const initialCapital = 100; // Capital initial en USDT
 
 // Route pour tester la connexion
 app.get('/', (req, res) => {
@@ -106,19 +108,40 @@ app.post('/webhook', async (req, res) => {
             res.status(200).send('Ordre d\'achat exécuté avec succès !');
         } else if (action === 'sell') {
             // TEST BOT
-            // Calcul des gains ou pertes
-            const profitOrLoss = ((price - 91300) * 100).toFixed(2);
-            const profitOrLossPercentage = (((price - 91300) / 91300) * 100).toFixed(2);
+            lastBuyPrice = 93000;
 
-            // Notification Telegram
-            bot.sendMessage(
-                chatId,
-                `✅ Ordre de vente exécuté :\n
-                - Symbole : ${symbol}\n
-                - Quantité : ${quantityToSell}\n- 
-                Prix : ${price} USDT\n
-                📊 Résultat du trade : ${profitOrLoss} USDT (${profitOrLossPercentage}%)`
-            );
+            if (lastBuyPrice) {
+                const profit = ((price - lastBuyPrice) * 0.001696).toFixed(2);
+                const profitPercentage = (((price - lastBuyPrice) / lastBuyPrice) * 100).toFixed(2);
+
+                // Mise à jour des gains totaux
+                totalProfit += parseFloat(profit);
+                const totalProfitPercentage = ((totalProfit / initialCapital) * 100).toFixed(2);
+
+                if (profit >= 0) {
+                    bot.sendMessage(
+                        chatId,
+                        `✅ Ordre de vente exécuté : PAYÉ !\n\n` +
+                        `- Symbole : BTC / USDT\n` +
+                        `- Gain réalisé 💵 : ${profit} USDT\n` +
+                        `- Pourcentage réalisé 📊 : ${profitPercentage} %\n\n` +
+                        `- Gains totaux 🪙 : ${totalProfit.toFixed(2)} USDT, ${totalProfitPercentage} %\n\n` +
+                        `💪 On continue comme ça !`
+                    );
+                } else {
+                    bot.sendMessage(
+                        chatId,
+                        `✅ Ordre de vente exécuté : Pas payé.\n\n` +
+                        `- Symbole : BTC / USDT\n` +
+                        `- Perte réalisée 💵 : ${Math.abs(profit)} USDT\n` +
+                        `- Pourcentage réalisé 📉 : ${profitPercentage} %\n\n` +
+                        `- Gains totaux 🪙 : ${totalProfit.toFixed(2)} USDT, ${totalProfitPercentage} %\n\n` +
+                        `🧘 "Les pertes font partie du jeu, restons motivés !"`
+                    );
+                }
+            } else {
+                bot.sendMessage(chatId, `⚠️ Impossible de calculer les gains ou pertes : Dernier prix d'achat inconnu.`);
+            }
 
             // Vérification du solde BTC pour une vente
             if (btcBalance <= 0) {
