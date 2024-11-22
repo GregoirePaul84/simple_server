@@ -3,6 +3,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const Binance = require('node-binance-api');
 const TelegramBot = require('node-telegram-bot-api');
+const { getGainMessage, getLossMessage } = require('./botmessages');
 
 // Configuration de Telegram
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
@@ -121,22 +122,22 @@ app.post('/webhook', async (req, res) => {
                 if (profit >= 0) {
                     bot.sendMessage(
                         chatId,
-                        `✅ Ordre de vente exécuté : PAYÉ !\n\n` +
+                        `✅ Ordre de vente exécuté : PAYÉ ! 🤑🤑🤑🤑\n\n` +
                         `- Symbole : BTC / USDT\n` +
-                        `- Gain réalisé 💵 : ${profit} USDT\n` +
+                        `- Gain réalisé 💶 : ${profit} USDT\n` +
                         `- Pourcentage réalisé 📊 : ${profitPercentage} %\n\n` +
-                        `- Gains totaux 🪙 : ${totalProfit.toFixed(2)} USDT, ${totalProfitPercentage} %\n\n` +
-                        `💪 On continue comme ça !`
+                        `- Gains totaux 💶💶💶 : ${totalProfit.toFixed(2)} USDT, ${totalProfitPercentage} %\n\n` +
+                        `💪 ${getGainMessage()}`
                     );
                 } else {
                     bot.sendMessage(
                         chatId,
-                        `✅ Ordre de vente exécuté : Pas payé.\n\n` +
+                        `✅ Ordre de vente exécuté : Pas payé. 💩\n\n` +
                         `- Symbole : BTC / USDT\n` +
-                        `- Perte réalisée 💵 : ${Math.abs(profit)} USDT\n` +
-                        `- Pourcentage réalisé 📉 : ${profitPercentage} %\n\n` +
-                        `- Gains totaux 🪙 : ${totalProfit.toFixed(2)} USDT, ${totalProfitPercentage} %\n\n` +
-                        `🧘 "Les pertes font partie du jeu, restons motivés !"`
+                        `- Perte réalisée 💩 : ${Math.abs(profit)} USDT\n` +
+                        `- Pourcentage réalisé 📊 : ${profitPercentage} %\n\n` +
+                        `- Gains totaux 💶💶💶 : ${totalProfit.toFixed(2)} USDT, ${totalProfitPercentage} %\n\n` +
+                        `🧘 ${getLossMessage()}`
                     );
                 }
             } else {
