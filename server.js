@@ -31,11 +31,13 @@ app.get('/', (req, res) => {
 app.get('/balance', async (_, res) => {
     try {
         const accountInfo = await binance.balance(); // Récupère le solde complet
-        // console.log('info compte =>', accountInfo);
-        
+
+        const btcBalance = accountInfo.BTC.available; // Solde BTC disponible
         const usdtBalance = accountInfo.USDT.available; // Solde USDT disponible
+        
         res.status(200).json({
             message: 'Solde récupéré avec succès',
+            btcBalance,
             usdtBalance,
         });
     } catch (error) {
@@ -46,7 +48,6 @@ app.get('/balance', async (_, res) => {
 
 // Endpoint Webhook pour recevoir les alertes de TradingView
 app.post('/webhook', async (req, res) => {
-    // Alerte tradingview reçue
     const { action, symbol, key } = req.body;
 
     // Vérification de la clé secrète
@@ -58,6 +59,7 @@ app.post('/webhook', async (req, res) => {
         // Récupération du solde total disponible pour le trading
         const accountInfo = await binance.balance();
         const usdtBalance = parseFloat(accountInfo.USDT.available);
+        const btcBalance = parseFloat(accountInfo.BTC.available);
 
         // Vérification des positions ouvertes
         const openOrders = await binance.openOrders(symbol);
@@ -70,22 +72,30 @@ app.post('/webhook', async (req, res) => {
         const prices = await binance.prices();
         const price = parseFloat(prices[symbol]);
 
-        // Calcul la quantité basée sur le solde total
-        const quantity = (usdtBalance / price).toFixed(6);
+        // Calcul de la quantité basée sur le solde
+        const quantityToBuy = (usdtBalance / price).toFixed(6);
+        const quantityToSell = btcBalance.toFixed(6);
 
-        // Erreur si solde insuffisant
-        if (usdtBalance <= 0) {
-            console.error('Solde insuffisant pour exécuter l\'ordre.');
-            return res.status(400).send('Solde insuffisant.');
-        }
-
-        // Exécute un ordre d'achat ou de vente selon l'alerte (ordre market)
         if (action === 'buy') {
-            const order = await binance.marketBuy(symbol, quantity);
+            // Vérification du solde USDT pour un achat
+            if (usdtBalance <= 0) {
+                console.error('Solde insuffisant en USDT pour acheter.');
+                return res.status(400).send('Solde USDT insuffisant.');
+            }
+
+            // Exécution de l'ordre d'achat
+            const order = await binance.marketBuy(symbol, quantityToBuy);
             console.log('Ordre d\'achat effectué :', order);
             res.status(200).send('Ordre d\'achat exécuté avec succès !');
         } else if (action === 'sell') {
-            const order = await binance.marketSell(symbol, quantity);
+            // Vérification du solde BTC pour une vente
+            if (btcBalance <= 0) {
+                console.error('Solde insuffisant en BTC pour vendre.');
+                return res.status(400).send('Solde BTC insuffisant.');
+            }
+
+            // Exécution de l'ordre de vente
+            const order = await binance.marketSell(symbol, quantityToSell);
             console.log('Ordre de vente effectué :', order);
             res.status(200).send('Ordre de vente exécuté avec succès !');
         }
