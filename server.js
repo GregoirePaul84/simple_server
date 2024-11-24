@@ -48,12 +48,18 @@ app.get('/', (_, res) => {
 });
 
 // Test du compte rendu mensuel
-app.get('/test-monthly-report', (_, res) => {
+app.get('/buy-test', (_, res) => {
     // Appel direct à la fonction pour générer un rapport
     sendMonthlyReport(bot, chatId, totalProfitCumulative, initialCapital, totalProfitMonthly);
     res.status(200).send('Rapport mensuel envoyé (test).');
 });
 
+// Test du compte rendu mensuel
+app.get('/test-monthly-report', (_, res) => {
+    // Appel direct à la fonction pour générer un rapport
+    sendMonthlyReport(bot, chatId, totalProfitCumulative, initialCapital, totalProfitMonthly);
+    res.status(200).send('Rapport mensuel envoyé (test).');
+});
 
 // Endpoint pour récupérer le solde
 app.get('/balance', async (_, res) => {
@@ -105,15 +111,15 @@ app.post('/webhook', async (req, res) => {
         const quantityToSell = btcBalance.toFixed(6);
 
         if (action === 'buy') {
-            // // Vérification du solde USDT pour un achat
-            // if (usdtBalance <= 0) {
-            //     console.error('Solde insuffisant en USDT pour acheter.');
-            //     return res.status(400).send('Solde USDT insuffisant.');
-            // }
+            // Vérification du solde USDT pour un achat
+            if (usdtBalance <= 0) {
+                console.error('Solde insuffisant en USDT pour acheter.');
+                return res.status(400).send('Solde USDT insuffisant.');
+            }
 
-            // // Exécution de l'ordre d'achat
-            // const order = await binance.marketBuy(symbol, quantityToBuy);
-            // console.log('Ordre d\'achat effectué :', order);
+            // Exécution de l'ordre d'achat
+            const order = await binance.marketBuy(symbol, quantityToBuy);
+            console.log('Ordre d\'achat effectué :', order);
 
             hasOpenLongPosition = true; // Confirme qu'une position longue a été prise
             lastBuyPrice = price; // Enregistrement du prix d'achat
@@ -128,20 +134,20 @@ app.post('/webhook', async (req, res) => {
         } else if (action === 'sell') {
 
             // Vérification qu'une position longue existe
-            // if (!hasOpenLongPosition) {
-            //     console.error('Pas de position longue ouverte. Vente non autorisée.');
-            //     return res.status(400).send('Pas de position longue ouverte.');
-            // }
+            if (!hasOpenLongPosition) {
+                console.error('Pas de position longue ouverte. Vente non autorisée.');
+                return res.status(400).send('Pas de position longue ouverte.');
+            }
 
-            // // Vérification du solde BTC pour une vente
-            // if (btcBalance <= 0) {
-            //     console.error('Solde insuffisant en BTC pour vendre.');
-            //     return res.status(400).send('Solde BTC insuffisant.');
-            // }
+            // Vérification du solde BTC pour une vente
+            if (btcBalance <= 0) {
+                console.error('Solde insuffisant en BTC pour vendre.');
+                return res.status(400).send('Solde BTC insuffisant.');
+            }
 
-            // // Exécution de l'ordre de vente
-            // const order = await binance.marketSell(symbol, quantityToSell);
-            // console.log('Ordre de vente effectué :', order);
+            // Exécution de l'ordre de vente
+            const order = await binance.marketSell(symbol, quantityToSell);
+            console.log('Ordre de vente effectué :', order);
 
             // POUR LE TEST
             lastBuyPrice = 93000;
