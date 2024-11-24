@@ -149,8 +149,8 @@ app.post('/webhook', async (req, res) => {
             const order = await binance.marketSell(symbol, quantityToSell);
             console.log('Ordre de vente effectué :', order);
 
-            // POUR LE TEST
-            lastBuyPrice = 93000;
+            // // POUR LE TEST
+            // lastBuyPrice = 93000;
 
             if (lastBuyPrice) {
                 const profit = ((price - lastBuyPrice) * quantityToSell).toFixed(2); // Gain ou perte en USDT

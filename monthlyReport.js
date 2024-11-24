@@ -12,9 +12,6 @@ const sendMonthlyReport = (
     const monthlyProfitPercentage = ((totalProfitMonthly / initialCapital) * 100).toFixed(2);
     const totalProfitPercentage = ((totalProfitCumulative / initialCapital) * 100).toFixed(2);
 
-    // Test profit négatif
-    totalProfitMonthly = -200;
-
     if (totalProfitMonthly >= 0) {
         // Rapport positif
         const positiveMessage = 
