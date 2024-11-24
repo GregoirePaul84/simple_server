@@ -21,7 +21,9 @@ const sendMonthlyReport = (
         `- Gains totaux cumulés 💰💰 : ${totalProfitCumulative.toFixed(2)} USDT\n` +
         `- Pourcentage total 📊📊 : ${totalProfitPercentage} %\n\n` +
         `🚀🚀🚀🚀 To the moon ! 🚀🚀🚀🚀`;
-        bot.sendSticker(chatId, 'AAMCAgADGQEAAxBnQKS8cNAjuqjb5wsbIC3NKunHDgACKgADwZxgDCPGi6TA6qoMAQAHbQADNgQ');
+        bot.sendSticker(chatId, 'AAMCAgADGQEAAxBnQKS8cNAjuqjb5wsbIC3NKunHDgACKgADwZxgDCPGi6TA6qoMAQAHbQADNgQ')
+        .then(() => console.log('Sticker envoyé avec succès !'))
+        .catch((error) => console.error('Erreur lors de l\'envoi du sticker :', error));
         bot.sendMessage(chatId, positiveMessage);
     } else {
         // Rapport négatif
