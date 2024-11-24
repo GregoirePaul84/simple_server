@@ -47,10 +47,26 @@ app.get('/', (_, res) => {
     res.send('Le serveur fonctionne correctement !');
 });
 
-// Test du compte rendu mensuel
+// Test du message d'achat du bot
 app.get('/buy-test', (_, res) => {
-    // Appel direct à la fonction pour générer un rapport
-    sendMonthlyReport(bot, chatId, totalProfitCumulative, initialCapital, totalProfitMonthly);
+    const symbol = 'BTC / USDT';
+    const quantity = 0.00015;
+    const price = 1000;
+    const stopLoss = price * 0.96;
+    const takeProfit = price * 1.08
+    const potentialGain = takeProfit - price;
+    const potentialLoss = stopLoss - price;
+
+    bot.sendMessage(
+        chatId,
+        `✅ Ordre d'achat exécuté :
+        - Symbole : ${symbol}
+        - Quantité : ${quantity}
+        - Prix : ${price} USDT 
+        - Gain potentiel : ${potentialGain} USDT
+        - Perte potentielle : ${potentialLoss} USDT
+        `
+    );
     res.status(200).send('Rapport mensuel envoyé (test).');
 });
 
@@ -121,13 +137,23 @@ app.post('/webhook', async (req, res) => {
             const order = await binance.marketBuy(symbol, quantityToBuy);
             console.log('Ordre d\'achat effectué :', order);
 
+            const stopLoss = price * 0.96;
+            const takeProfit = price * 1.08
+            const potentialGain = takeProfit - price;
+            const potentialLoss = stopLoss - price;
+
             hasOpenLongPosition = true; // Confirme qu'une position longue a été prise
             lastBuyPrice = price; // Enregistrement du prix d'achat
 
-            // Envoi de notification Telegram
             bot.sendMessage(
                 chatId,
-                `✅ Ordre d'achat exécuté :\n- Symbole : ${symbol}\n- Quantité : ${quantity}\n- Prix : ${price} USDT`
+                `✅ Ordre d'achat exécuté :
+                - Symbole : ${symbol}
+                - Quantité : ${quantity}
+                - Prix : ${price} USDT 
+                - Gain potentiel : ${potentialGain} USDT
+                - Perte potentielle : ${potentialLoss} USDT
+                `
             );
 
             res.status(200).send('Ordre d\'achat exécuté avec succès !');
