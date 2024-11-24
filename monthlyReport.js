@@ -12,6 +12,9 @@ const sendMonthlyReport = (
     const monthlyProfitPercentage = ((totalProfitMonthly / initialCapital) * 100).toFixed(2);
     const totalProfitPercentage = ((totalProfitCumulative / initialCapital) * 100).toFixed(2);
 
+    // Test profit négatif
+    totalProfitMonthly = -200;
+
     if (totalProfitMonthly >= 0) {
         // Rapport positif
         const positiveMessage = 
@@ -21,20 +24,18 @@ const sendMonthlyReport = (
         `- Gains totaux cumulés 💰💰 : ${totalProfitCumulative.toFixed(2)} USDT\n` +
         `- Pourcentage total 📊📊 : ${totalProfitPercentage} %\n\n` +
         `🚀🚀🚀🚀 To the moon ! 🚀🚀🚀🚀`;
-        bot.sendSticker(chatId, 'AAMCAgADGQEAAxBnQKS8cNAjuqjb5wsbIC3NKunHDgACKgADwZxgDCPGi6TA6qoMAQAHbQADNgQ')
-        .then(() => console.log('Sticker envoyé avec succès !'))
-        .catch((error) => console.error('Erreur lors de l\'envoi du sticker :', error));
+        bot.sendSticker(chatId, 'CAACAgIAAxkBAAMQZ0CkvHDQI7qo2-cLGyAtzSrpxw4AAioAA8GcYAwjxoukwOqqDDYE')
         bot.sendMessage(chatId, positiveMessage);
     } else {
         // Rapport négatif
         const negativeMessage = 
-        `📅 Rapport mensuel : Pas payé. 😔\n`
+        `📅 Rapport mensuel : Pas payé. 😔\n` +
         `- Pertes totales mensuelles 💰 : ${Math.abs(totalProfitMonthly).toFixed(2)} USDT\n` +
         `- Pourcentage de pertes mensuel 📊 : ${Math.abs(totalProfitPercentage)} %\n\n` +
         `- Gains totaux cumulés 💰💰 : ${totalProfitCumulative.toFixed(2)} USDT\n` +
         `- Pourcentage total 📊📊 : ${totalProfitPercentage} %\n\n` +
         `🧘‍♂️🧘‍♂️🧘‍♂️🧘‍♂️ Gardons confiance, la stratégie est bonne ! 🧘‍♂️🧘‍♂️🧘‍♂️🧘‍♂️`;
-        bot.sendSticker(chatId, 'AAMCAgADGQEAAxFnQKTrSSUaVTNNfhigy1aOKTx_6gACLQADwZxgDOM08idy_5BlAQAHbQADNgQ'); 
+        bot.sendSticker(chatId, 'CAACAgIAAxkBAAMRZ0Ck60klGlUzTX4YoMtWjik8f-oAAi0AA8GcYAzjNPIncv-QZTYE'); 
         bot.sendMessage(chatId, negativeMessage);
     }
 };
