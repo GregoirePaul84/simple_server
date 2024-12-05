@@ -87,14 +87,14 @@ app.get('/test-monthly-report', (_, res) => {
 app.get('/balance', async (_, res) => {
     try {
         const accountInfo = await binance.balance(); // Récupère le solde complet
-
+        
         const btcBalance = accountInfo.BTC.available; // Solde BTC disponible
-        const USDCBalance = accountInfo.USDC.available; // Solde USDC disponible
+        const usdcBalance = accountInfo.USDC.available; // Solde USDC disponible
         
         res.status(200).json({
             message: 'Solde récupéré avec succès',
             btcBalance,
-            USDCBalance,
+            usdcBalance,
         });
     } catch (error) {
         console.error('Erreur lors de la récupération du solde :', error);
@@ -102,52 +102,57 @@ app.get('/balance', async (_, res) => {
     }
 });
 
+
 // Endpoint Webhook pour recevoir les alertes de TradingView
 app.post('/webhook', async (req, res) => {
     const { action, symbol, key } = req.body;
-
+    
     // Vérification de la clé secrète
     if (key !== process.env.WEBHOOK_SECRET) {
         return res.status(401).send('Clé secrète incorrecte.');
     }
 
     try {
+                
         // Récupération du solde total disponible pour le trading
         const accountInfo = await binance.balance();
+        
         const usdcBalance = parseFloat(accountInfo.USDC.available);
         const btcBalance = parseFloat(accountInfo.BTC.available);
-
+        
         // Prix actuel BTC / USDC
         const prices = await binance.prices();
         const price = parseFloat(prices[symbol]);
 
         // ****** GESTION POSITION LONGUE  ****** //
         // ACHAT LONG
-        if (action === 'LONG') {
-            takeLongPosition(binance, symbol, price, usdcBalance, hasOpenLongPosition, lastBuyPrice);
+        if (action === 'LONG') {            
+            await takeLongPosition(binance, symbol, price, usdcBalance, hasOpenLongPosition, lastBuyPrice, bot, chatId);
         } 
 
         // VENTE LONG : stop loss et take profit
         else if (action === 'STOP_LOSS_LONG' || action === 'TAKE_PROFIT_LONG') {
-            handleCloseLong(binance, symbol, price, btcBalance, hasOpenLongPosition, lastBuyPrice);
+            await handleCloseLong(binance, symbol, price, btcBalance, hasOpenLongPosition, lastBuyPrice, initialCapital, totalProfitCumulative, totalProfitMonthly, bot, chatId);
         }
         
         // ****** GESTION POSITION COURTE  ****** //
         // VENTE SHORT
         else if (action === 'SHORT') {
-            takeShortPosition(binance, symbol, price, usdcBalance, hasOpenShortPosition, lastSellPrice, shortQuantity);
+            await takeShortPosition(binance, symbol, price, usdcBalance, hasOpenShortPosition, lastSellPrice, shortQuantity, bot, chatId);
         } 
 
         // ACHAT SHORT : stop loss et take profit
         else if (action === 'STOP_LOSS_SHORT' || action === 'TAKE_PROFIT_SHORT') {
-            handleCloseShort(binance, symbol, price, usdcBalance, hasOpenShortPosition, lastSellPrice, shortQuantity);
+            await handleCloseShort(binance, symbol, price, usdcBalance, hasOpenShortPosition, lastSellPrice, initialCapital, shortQuantity, totalProfitCumulative, totalProfitMonthly, bot, chatId);
         }
-    } catch (error) {
-        console.error('Erreur lors de l\'exécution de l\'ordre :', error);
 
-        // Notification d'erreur à Telegram
-        bot.sendMessage(chatId, `❌ Erreur lors de l'exécution de l'ordre : ${error.message}`);
-        
+        res.status(200).send('Ordre effectué avec succès.')
+
+    } catch (error) {
+        console.error('Erreur lors de l\'exécution de l\'ordre :', error.message);
+
+        bot.sendMessage(chatId, `❌ Erreur : ${error.message}`);
+
         res.status(500).send('Erreur lors de l\'exécution de l\'ordre.');
     }
 });
