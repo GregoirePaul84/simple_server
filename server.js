@@ -53,6 +53,11 @@ app.get('/', (_, res) => {
     res.send('Le serveur fonctionne correctement !');
 });
 
+app.use((req, res, next) => {
+    console.log(`Requête reçue de : ${req.ip}`);
+    next();
+});
+
 // Test du message d'achat du bot
 app.get('/buy-test', (_, res) => {
     const symbol = 'BTC / USDC';
@@ -109,21 +114,27 @@ app.post('/webhook', async (req, res) => {
     
     // Vérification de la clé secrète
     if (key !== process.env.WEBHOOK_SECRET) {
+        console.log('clé secrète incorrecte');
         return res.status(401).send('Clé secrète incorrecte.');
     }
 
     try {
-                
+        console.log('début du webhook');
+        
         // Récupération du solde total disponible pour le trading
         const accountInfo = await binance.balance();
         
         const usdcBalance = parseFloat(accountInfo.USDC.available);
         const btcBalance = parseFloat(accountInfo.BTC.available);
         
+        console.log(`Balances calculées. ${usdcBalance}USDC - ${btcBalance}BTC.`);
+        
         // Prix actuel BTC / USDC
         const prices = await binance.prices();
         const price = parseFloat(prices[symbol]);
 
+        console.log(`Prix actuel du BTC => ${price}USDC`);
+        
         // ****** GESTION POSITION LONGUE  ****** //
         // ACHAT LONG
         if (action === 'LONG') {            
