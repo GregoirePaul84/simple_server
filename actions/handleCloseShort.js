@@ -16,12 +16,6 @@ const handleCloseShort = async(
     chatId
 ) => {
 
-    // Test local
-    // shortQuantity = 0.000990;
-    // lastSellPrice = 105500;
-    // totalProfitCumulative = 22.27;
-    // totalProfitMonthly = 22.27;
-
     // Vérification qu'une position courte existe
     if (!shortQuantity || shortQuantity <= 0) {
         console.error('Pas de position courte ouverte. Clôture non autorisé.');
@@ -36,8 +30,8 @@ const handleCloseShort = async(
     }
 
     // ATTENTION : la ligne suivante interagit avec Binance
-    // const order = await binance.marketBuy(symbol, shortQuantity);
-    console.log('Clôture du short.');
+    const order = await binance.marketBuy(symbol, shortQuantity);
+    console.log('Clôture du short.', order);
 
     if (lastSellPrice) {
         const profit = ((lastSellPrice - price) * shortQuantity).toFixed(2); // Profit ou perte de la transaction en USDC

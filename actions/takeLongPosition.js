@@ -17,8 +17,8 @@ const takeLongPosition = async(binance, symbol, price, usdcBalance, hasOpenLongP
     const quantityToBuy = (usdcBalance / price).toFixed(6);
     
     // ATTENTION : la ligne suivante interagit avec Binance
-    // const order = await binance.marketBuy(symbol, quantityToBuy);
-    console.log('Prise de position longue.');
+    const order = await binance.marketBuy(symbol, quantityToBuy);
+    console.log('Prise de position longue.', order);
     
     // Calcul des niveaux de stop-loss et de take-profit
     const stopLoss = price * (1 - 5.0 / 100); 

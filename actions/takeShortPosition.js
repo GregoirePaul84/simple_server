@@ -1,9 +1,6 @@
 // Fonction pour gérer un short
 const takeShortPosition = async(binance, symbol, price, usdcBalance, hasOpenShortPosition, lastSellPrice, shortQuantity, bot, chatId) => {
 
-    // Test local
-    // usdcBalance = 0;
-
     // Vérifie qu'un ordre n'est pas en cours
     const openOrders = await binance.openOrders(symbol);
     if (openOrders.length > 0) {
@@ -20,8 +17,8 @@ const takeShortPosition = async(binance, symbol, price, usdcBalance, hasOpenShor
     const quantityToSell = (usdcBalance / price).toFixed(6);
 
     // ATTENTION : la ligne suivante interagit avec Binance
-    // const order = await binance.marketSell(symbol, quantityToSell);
-    console.log('Ordre de vente à découvert effectué.');
+    const order = await binance.marketSell(symbol, quantityToSell);
+    console.log('Ordre de vente à découvert effectué.', order);
 
     // Calcul des niveaux de stop-loss et de take-profit
     const stopLoss = price * (1 + 5.0 / 100); 

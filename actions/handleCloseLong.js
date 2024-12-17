@@ -15,13 +15,6 @@ const handleCloseLong = async(
     chatId
 ) => {
 
-    // Test local
-    // hasOpenLongPosition = true;
-    // btcBalance = 0.0010000;
-    // lastBuyPrice = 110000;
-    // totalProfitCumulative = 22.27;
-    // totalProfitMonthly = 22.27;
-
     // Vérification qu'une position longue existe
     if (!hasOpenLongPosition) {
         console.error('Pas de position longue ouverte. Impossible de clôturer.');
@@ -37,8 +30,8 @@ const handleCloseLong = async(
     const quantityToSell = btcBalance.toFixed(6);
 
     // ATTENTION : la ligne suivante interagit avec Binance
-    // const order = await binance.marketSell(symbol, quantityToSell);
-    console.log('Clôture de la position longue.');
+    const order = await binance.marketSell(symbol, quantityToSell);
+    console.log('Clôture de la position longue.', order);
 
     // Récupération de la nouvelle balance
     const accountInfo = await binance.balance();
