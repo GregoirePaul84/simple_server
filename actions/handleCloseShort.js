@@ -17,21 +17,31 @@ const handleCloseShort = async(
 ) => {
 
     // Vérification qu'une position courte existe
-    if (!shortQuantity || shortQuantity <= 0) {
+    if (!hasOpenShortPosition || !shortQuantity || shortQuantity <= 0) {
         console.error('Pas de position courte ouverte. Clôture non autorisé.');
         throw new Error('Pas de position courte ouverte. Clôture non autorisé.');
     }
 
-    // Vérification du solde USDC pour racheter la position
-    const requiredUSDC = price * shortQuantity;
-    if (usdcBalance < requiredUSDC) {
-        console.error('Solde insuffisant en USDC pour racheter la position.');
-        throw new Error('Solde insuffisant en USDC pour racheter la position.');
-    }
+    // Racheter les actifs empruntés (BTC)
+    const order = await binance.marginOrder({
+        symbol,
+        side: 'BUY',
+        type: 'MARKET',
+        quantity: shortQuantity,
+        isIsolated: true, // Spécifie que c'est une opération de marge isolée
+    });
 
-    // ATTENTION : la ligne suivante interagit avec Binance
-    const order = await binance.marketBuy(symbol, shortQuantity);
-    console.log('Clôture du short.', order);
+    console.log('Ordre d\'achat pour clôturer le short effectué.', order);
+
+    // Rembourser les BTC empruntés
+    await binance.marginRepay({
+        asset: 'BTC',
+        amount: shortQuantity,
+        isIsolated: true,
+        symbol,
+    });
+    
+    console.log(`Remboursement de ${shortQuantity} BTC effectué.`);
 
     if (lastSellPrice) {
         const profit = ((lastSellPrice - price) * shortQuantity).toFixed(2); // Profit ou perte de la transaction en USDC

@@ -16,8 +16,24 @@ const takeShortPosition = async(binance, symbol, price, usdcBalance, hasOpenShor
 
     const quantityToSell = (usdcBalance / price).toFixed(6);
 
-    // ATTENTION : la ligne suivante interagit avec Binance
-    const order = await binance.marketSell(symbol, quantityToSell);
+    // Étape 1 : Emprunter des BTC pour vendre à découvert
+    await binance.marginBorrow({
+        asset: 'BTC',
+        amount: quantityToSell,
+        isIsolated: true,
+        symbol,
+    });
+    console.log(`Emprunt de ${quantityToSell} BTC effectué pour ${symbol}.`);
+
+    // Étape 2 : Vendre les BTC empruntés
+    const order = await binance.marginOrder({
+        symbol,
+        side: 'SELL',
+        type: 'MARKET',
+        quantity: quantityToSell,
+        isIsolated: true, // Spécifie la marge isolée
+    });
+    
     console.log('Ordre de vente à découvert effectué.', order);
 
     // Calcul des niveaux de stop-loss et de take-profit

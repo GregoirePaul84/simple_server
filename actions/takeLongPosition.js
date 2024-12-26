@@ -2,7 +2,8 @@
 const takeLongPosition = async(binance, symbol, price, usdcBalance, hasOpenLongPosition, lastBuyPrice, bot, chatId) => {
 
     // Vérifie qu'un ordre n'est pas en cours
-    const openOrders = await binance.openOrders(symbol);
+    const openOrders = await binance.marginOpenOrders({ symbol, isIsolated: true });
+
     if (openOrders.length > 0) {
         console.error(`Une position est déjà ouverte pour ${symbol}.`);
         throw new Error(`Une position est déjà ouverte pour ${symbol}.`);
@@ -16,8 +17,14 @@ const takeLongPosition = async(binance, symbol, price, usdcBalance, hasOpenLongP
     
     const quantityToBuy = (usdcBalance / price).toFixed(6);
     
-    // ATTENTION : la ligne suivante interagit avec Binance
-    const order = await binance.marketBuy(symbol, quantityToBuy);
+    // ACHAT
+    const order = await binance.marginOrder({
+        symbol,
+        side: 'BUY',
+        type: 'MARKET',
+        quantity: quantityToBuy,
+        isIsolated: true,
+    });
     console.log('Prise de position longue.', order);
     
     // Calcul des niveaux de stop-loss et de take-profit

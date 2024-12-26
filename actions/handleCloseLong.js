@@ -1,4 +1,5 @@
 const { getGainMessage, getLossMessage } = require('../botmessages');
+const { getIsolatedMarginAccount } = require('../getIsolatedMarginAccount');
 
 // Fonction pour gérer une vente
 const handleCloseLong = async(
@@ -29,15 +30,31 @@ const handleCloseLong = async(
 
     const quantityToSell = btcBalance.toFixed(6);
 
-    // ATTENTION : la ligne suivante interagit avec Binance
-    const order = await binance.marketSell(symbol, quantityToSell);
+    // Étape 1 : Vendre les BTC pour fermer la position longue
+    const order = await binance.marginOrder({
+        symbol,
+        side: 'SELL',
+        type: 'MARKET',
+        quantity: quantityToSell,
+        isIsolated: true, // Spécifie que c'est une opération de marge isolée
+    });
+
     console.log('Clôture de la position longue.', order);
 
-    // Récupération de la nouvelle balance
-    const accountInfo = await binance.balance();
-        
-    const newUsdcBalance = parseFloat(accountInfo.USDC.available);
-    const newBtcBalance = parseFloat(accountInfo.BTC.available);
+    // Étape 2 : Récupération de la balance après la vente
+    const marginAccount = await getIsolatedMarginAccount(
+        process.env.BINANCE_API_KEY,
+        process.env.BINANCE_API_SECRET
+    );
+
+    const btcUsdcData = marginAccount.assets.find(asset => asset.symbol === 'BTCUSDC');
+
+    if (!btcUsdcData) {
+        throw new Error('Impossible de récupérer les données pour la paire BTCUSDC.');
+    }
+
+    const newUsdcBalance = parseFloat(btcUsdcData.quoteAsset.free);
+    const newBtcBalance = parseFloat(btcUsdcData.baseAsset.free);
 
     if (lastBuyPrice) {
         const profit = ((price - lastBuyPrice) * quantityToSell).toFixed(2);

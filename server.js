@@ -1,13 +1,15 @@
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
-const Binance = require('node-binance-api');
+const Binance = require('binance-api-node').default;
 const TelegramBot = require('node-telegram-bot-api');
+const { getIsolatedMarginAccount } = require('./getIsolatedMarginAccount');
 const { takeLongPosition } = require('./actions/takeLongPosition');
 const { takeShortPosition } = require('./actions/takeShortPosition');
 const { handleCloseLong } = require('./actions/handleCloseLong');
 const { handleCloseShort } = require('./actions/handleCloseShort');
 const { scheduleMonthlyReport, sendMonthlyReport } = require('./monthlyReport'); // Import du fichier pour le rapport mensuel
+
 
 // Configuration de Telegram
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
@@ -23,13 +25,9 @@ const port = 3000;
 app.use(bodyParser.json());
 
 // Configuration de Binance API
-const binance = new Binance().options({
-    APIKEY: process.env.BINANCE_API_KEY, // Clé API Binance
-    APISECRET: process.env.BINANCE_API_SECRET, // Clé secrète Binance
-    family: 4, // Forcer l'utilisation d'IPv4
-    useServerTime: true, // Synchronisation avec l'heure du serveur Binance
-    reconnect: true, // Permet de se reconnecter automatiquement
-    verbose: true, // Affiche les logs pour aider au débogage
+const binance = Binance({
+    apiKey: process.env.BINANCE_API_KEY,
+    apiSecret: process.env.BINANCE_API_SECRET,
 });
 
 // Variables de base
@@ -40,7 +38,7 @@ let lastSellPrice = null; // Dernier prix de short
 let shortQuantity = null; // Nombre de BTC vendus à découvert pour le short
 let totalProfitCumulative = 0; // Total depuis le début
 let totalProfitMonthly = 0; // Total du mois en cours
-const initialCapital = 100; // Capital initial en USDC
+const initialCapital = 102.69752060; // Capital initial en USDC
 
 // Setter pour réinitialiser les profits mensuels
 const resetMonthlyProfit = () => {
@@ -88,22 +86,33 @@ app.get('/test-monthly-report', (_, res) => {
     res.status(200).send('Rapport mensuel envoyé (test).');
 });
 
-// Endpoint pour récupérer le solde
 app.get('/balance', async (_, res) => {
     try {
-        const accountInfo = await binance.balance(); // Récupère le solde complet
-        
-        const btcBalance = accountInfo.BTC.available; // Solde BTC disponible
-        const usdcBalance = accountInfo.USDC.available; // Solde USDC disponible
-        
+        // Appel à l'API pour récupérer le portefeuille de marge isolée
+        const data = await getIsolatedMarginAccount(
+            process.env.BINANCE_API_KEY,
+            process.env.BINANCE_API_SECRET
+        );
+
+        // Recherche de la paire BTCUSDT
+        const btcUsdcData = data.assets.find(asset => asset.symbol === 'BTCUSDC');
+
+        if (!btcUsdcData) {
+            throw new Error('La paire BTCUSDC n\'a pas été trouvée dans le portefeuille isolé.');
+        }
+
+        // Extraire les balances pour BTC (baseAsset) et USDC (quoteAsset)
+        const usdcBalance = btcUsdcData.quoteAsset.free;
+        const btcBalance = btcUsdcData.baseAsset.free;
+
         res.status(200).json({
-            message: 'Solde récupéré avec succès',
-            btcBalance,
+            message: 'Solde de marge isolée récupéré avec succès',
             usdcBalance,
+            btcBalance,
         });
     } catch (error) {
-        console.error('Erreur lors de la récupération du solde :', error);
-        res.status(500).json({ error: 'Impossible de récupérer le solde' });
+        console.error('Erreur lors de la récupération de la balance isolée :', error.message);
+        res.status(500).json({ error: 'Impossible de récupérer la balance isolée' });
     }
 });
 
@@ -121,11 +130,21 @@ app.post('/webhook', async (req, res) => {
     try {
         console.log('début du webhook');
         
-        // Récupération du solde total disponible pour le trading
-        const accountInfo = await binance.balance();
-        
-        const usdcBalance = parseFloat(accountInfo.USDC.available);
-        const btcBalance = parseFloat(accountInfo.BTC.available);
+        // Récupération du solde pour le portefeuille de marge isolée
+        const marginAccount = await getIsolatedMarginAccount(
+            process.env.BINANCE_API_KEY,
+            process.env.BINANCE_API_SECRET
+        );
+
+        // Balances pour BTC et USDC
+        const btcUsdcData = marginAccount.assets.find(asset => asset.symbol === 'BTCUSDC');
+
+        if (!btcUsdcData) {
+            throw new Error('La paire BTCUSDC n\'a pas été trouvée dans le portefeuille isolé.');
+        }
+
+        const usdcBalance = parseFloat(btcUsdcData.quoteAsset.free);
+        const btcBalance = parseFloat(btcUsdcData.baseAsset.free);
         
         console.log(`Balances calculées. ${usdcBalance}USDC - ${btcBalance}BTC.`);
         
