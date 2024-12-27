@@ -1,6 +1,10 @@
+const { cancelOpenOrders } = require("./cancelOpenOrders");
+
 // Fonction pour gérer un achat (position longue)
 const takeLongPosition = async(binance, symbol, price, usdcBalance, hasOpenLongPosition, lastBuyPrice, bot, chatId) => {
 
+    await cancelOpenOrders(binance, symbol);
+    
     // Vérifie qu'un ordre n'est pas en cours
     const openOrders = await binance.marginOpenOrders({ symbol, isIsolated: true });
 
@@ -15,7 +19,22 @@ const takeLongPosition = async(binance, symbol, price, usdcBalance, hasOpenLongP
         throw new Error('Solde USDC insuffisant.');
     }
     
-    const quantityToBuy = (usdcBalance / price).toFixed(6);
+    const stepSize = 0.00001; // StepSize pour BTCUSDC
+    const minQty = 0.00001; // Quantité minimale
+
+    const quantityToBuy = Math.floor((usdcBalance / price) / stepSize) * stepSize;
+
+    if (quantityToBuy < minQty) {
+        throw new Error('La quantité calculée est inférieure au minimum requis.');
+    }
+
+    console.log(`Quantité ajustée : ${quantityToBuy}`);
+
+    const totalOrderValue = quantityToBuy * price;
+
+    if (totalOrderValue < 5) {
+        throw new Error('Le montant total de l\'ordre est inférieur au minimum requis de 5 USDC.');
+    }
     
     // ACHAT
     const order = await binance.marginOrder({
@@ -25,6 +44,7 @@ const takeLongPosition = async(binance, symbol, price, usdcBalance, hasOpenLongP
         quantity: quantityToBuy,
         isIsolated: true,
     });
+
     console.log('Prise de position longue.', order);
     
     // Calcul des niveaux de stop-loss et de take-profit
@@ -47,6 +67,8 @@ const takeLongPosition = async(binance, symbol, price, usdcBalance, hasOpenLongP
         - Perte potentielle : -${potentialLoss.toFixed(2)} USDC
         `
     );
+
+    return order;
 }
 
 module.exports = { takeLongPosition };

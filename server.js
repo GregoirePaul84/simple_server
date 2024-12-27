@@ -2,12 +2,12 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const Binance = require('binance-api-node').default;
+const { ErrorCodes } = require('binance-api-node');
 const TelegramBot = require('node-telegram-bot-api');
 const { getIsolatedMarginAccount } = require('./getIsolatedMarginAccount');
 const { takeLongPosition } = require('./actions/takeLongPosition');
 const { takeShortPosition } = require('./actions/takeShortPosition');
-const { handleCloseLong } = require('./actions/handleCloseLong');
-const { handleCloseShort } = require('./actions/handleCloseShort');
+const { placeOCOOrder } = require('./actions/placeOcoOrder');
 const { scheduleMonthlyReport, sendMonthlyReport } = require('./monthlyReport'); // Import du fichier pour le rapport mensuel
 
 
@@ -28,6 +28,10 @@ app.use(bodyParser.json());
 const binance = Binance({
     apiKey: process.env.BINANCE_API_KEY,
     apiSecret: process.env.BINANCE_API_SECRET,
+    // family: 4, // Forcer l'utilisation d'IPv4
+    // useServerTime: true, // Synchronisation avec l'heure du serveur Binance
+    // reconnect: true, // Permet de se reconnecter automatiquement
+    verbose: true, // Affiche les logs pour aider au débogage
 });
 
 // Variables de base
@@ -144,9 +148,14 @@ app.post('/webhook', async (req, res) => {
         }
 
         const usdcBalance = parseFloat(btcUsdcData.quoteAsset.free);
-        const btcBalance = parseFloat(btcUsdcData.baseAsset.free);
         
-        console.log(`Balances calculées. ${usdcBalance}USDC - ${btcBalance}BTC.`);
+        // USDC
+        console.log('Solde USDC disponible :', btcUsdcData.quoteAsset.free, 'USDC');
+        console.log('Solde USDC emprunté :', btcUsdcData.quoteAsset.borrowed, 'USDC');
+
+        // BTC
+        console.log('Solde BTC disponible :', btcUsdcData.baseAsset.free);
+        console.log('Solde BTC emprunté :', btcUsdcData.baseAsset.borrowed);
         
         // Prix actuel BTC / USDC
         const prices = await binance.prices();
@@ -158,31 +167,52 @@ app.post('/webhook', async (req, res) => {
         // ACHAT LONG
         if (action === 'LONG') {            
             await takeLongPosition(binance, symbol, price, usdcBalance, hasOpenLongPosition, lastBuyPrice, bot, chatId);
-        } 
 
-        // VENTE LONG : stop loss et take profit
-        else if (action === 'STOP_LOSS_LONG' || action === 'TAKE_PROFIT_LONG') {
-            await handleCloseLong(binance, symbol, price, btcBalance, hasOpenLongPosition, lastBuyPrice, initialCapital, totalProfitCumulative, totalProfitMonthly, bot, chatId);
-        }
+            const marginAccount = await getIsolatedMarginAccount(
+                process.env.BINANCE_API_KEY,
+                process.env.BINANCE_API_SECRET
+            );
+            
+            const btcUsdcData = marginAccount.assets.find(asset => asset.symbol === 'BTCUSDC');
+            
+            if (!btcUsdcData) {
+                throw new Error('Impossible de récupérer les données pour la paire BTCUSDC.');
+            }
+            
+            // Solde réel en BTC disponible
+            const btcBalance = parseFloat(btcUsdcData.baseAsset.free);
+            
+            console.log('Solde réel BTC disponible :', btcBalance);
+
+            // Ordre OCO : gestion des SL et TP en limit
+            await placeOCOOrder(binance, symbol, 'BUY', price, btcBalance);
+        } 
         
         // ****** GESTION POSITION COURTE  ****** //
         // VENTE SHORT
         else if (action === 'SHORT') {
-            await takeShortPosition(binance, symbol, price, usdcBalance, hasOpenShortPosition, lastSellPrice, shortQuantity, bot, chatId);
-        } 
+            const shortOrder = await takeShortPosition(binance, symbol, price, usdcBalance, hasOpenShortPosition, lastSellPrice, shortQuantity, bot, chatId);
 
-        // ACHAT SHORT : stop loss et take profit
-        else if (action === 'STOP_LOSS_SHORT' || action === 'TAKE_PROFIT_SHORT') {
-            await handleCloseShort(binance, symbol, price, usdcBalance, hasOpenShortPosition, lastSellPrice, initialCapital, shortQuantity, totalProfitCumulative, totalProfitMonthly, bot, chatId);
-        }
+            // Ordre OCO : gestion des SL et TP en limit
+            await placeOCOOrder(binance, symbol, 'SELL', price, parseFloat(shortOrder.executedQty));
+        } 
 
         res.status(200).send('Ordre effectué avec succès.')
 
     } catch (error) {
-        console.error('Erreur lors de l\'exécution de l\'ordre :', error.message);
-
+        console.log('le code erreur =>', error.code);
+        
+        if (error.code === ErrorCodes.INSUFFICIENT_BALANCE) {
+            console.error('Erreur : Solde insuffisant pour effectuer l\'ordre.');
+        } else if (error.code === ErrorCodes.INVALID_ORDER_TYPE) {
+            console.error('Erreur : Type d\'ordre invalide.');
+        } else if (error.code === -2010) { // "New order rejected"
+            console.error('Erreur : Nouvel ordre rejeté. Vérifiez les règles de la paire.');
+        } else {
+            console.error('Erreur générale :', error.message);
+        }
+        
         bot.sendMessage(chatId, `❌ Erreur : ${error.message}`);
-
         res.status(500).send('Erreur lors de l\'exécution de l\'ordre.');
     }
 });

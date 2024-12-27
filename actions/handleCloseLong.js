@@ -15,12 +15,13 @@ const handleCloseLong = async(
     bot, 
     chatId
 ) => {
-
+    console.log('position longue ouverte ?', hasOpenLongPosition);
+    
     // Vérification qu'une position longue existe
-    if (!hasOpenLongPosition) {
-        console.error('Pas de position longue ouverte. Impossible de clôturer.');
-        throw new Error('Pas de position longue ouverte. Impossible de clôturer.');
-    }
+    // if (!hasOpenLongPosition) {
+    //     console.error('Pas de position longue ouverte. Impossible de clôturer.');
+    //     throw new Error('Pas de position longue ouverte. Impossible de clôturer.');
+    // }
 
     // Vérification du solde BTC pour une vente
     if (btcBalance <= 0) {
@@ -28,7 +29,10 @@ const handleCloseLong = async(
         throw new Error('Solde BTC insuffisant. Impossible de clôturer.');
     }
 
-    const quantityToSell = btcBalance.toFixed(6);
+    const stepSize = 0.00001; // LOT_SIZE pour BTCUSDC
+    const quantityToSell = Math.floor(btcBalance / stepSize) * stepSize;
+
+    console.log('Quantité ajustée pour vente :', quantityToSell);
 
     // Étape 1 : Vendre les BTC pour fermer la position longue
     const order = await binance.marginOrder({

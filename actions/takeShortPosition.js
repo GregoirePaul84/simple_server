@@ -1,5 +1,9 @@
+const { cancelOpenOrders } = require('./cancelOpenOrders');
+
 // Fonction pour gérer un short
 const takeShortPosition = async(binance, symbol, price, usdcBalance, hasOpenShortPosition, lastSellPrice, shortQuantity, bot, chatId) => {
+
+    await cancelOpenOrders(binance, symbol);
 
     // Vérifie qu'un ordre n'est pas en cours
     const openOrders = await binance.openOrders(symbol);
@@ -58,6 +62,8 @@ const takeShortPosition = async(binance, symbol, price, usdcBalance, hasOpenShor
         - Perte potentielle : -${potentialLoss.toFixed(2)} USDC
         `
     );  
+
+    return order;
 }
 
 module.exports = { takeShortPosition };
