@@ -5,11 +5,11 @@ const Binance = require('binance-api-node').default;
 const { ErrorCodes } = require('binance-api-node');
 const TelegramBot = require('node-telegram-bot-api');
 const { getIsolatedMarginAccount } = require('./getIsolatedMarginAccount');
+const { getBalanceData } = require('./getBalanceData');
 const { takeLongPosition } = require('./actions/takeLongPosition');
 const { takeShortPosition } = require('./actions/takeShortPosition');
 const { placeOCOOrder } = require('./actions/placeOcoOrder');
 const { scheduleMonthlyReport, sendMonthlyReport } = require('./monthlyReport'); // Import du fichier pour le rapport mensuel
-
 
 // Configuration de Telegram
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
@@ -134,28 +134,20 @@ app.post('/webhook', async (req, res) => {
     try {
         console.log('début du webhook');
         
-        // Récupération du solde pour le portefeuille de marge isolée
-        const marginAccount = await getIsolatedMarginAccount(
-            process.env.BINANCE_API_KEY,
-            process.env.BINANCE_API_SECRET
-        );
+        // // Récupération du solde pour le portefeuille de marge isolée
+        // const marginAccount = await getIsolatedMarginAccount(
+        //     process.env.BINANCE_API_KEY,
+        //     process.env.BINANCE_API_SECRET
+        // );
 
-        // Balances pour BTC et USDC
-        const btcUsdcData = marginAccount.assets.find(asset => asset.symbol === 'BTCUSDC');
+        // // Balances pour BTC et USDC
+        // const btcUsdcData = marginAccount.assets.find(asset => asset.symbol === 'BTCUSDC');
 
-        if (!btcUsdcData) {
-            throw new Error('La paire BTCUSDC n\'a pas été trouvée dans le portefeuille isolé.');
-        }
+        // if (!btcUsdcData) {
+        //     throw new Error('La paire BTCUSDC n\'a pas été trouvée dans le portefeuille isolé.');
+        // }
 
-        const usdcBalance = parseFloat(btcUsdcData.quoteAsset.free);
-        
-        // USDC
-        console.log('Solde USDC disponible :', btcUsdcData.quoteAsset.free, 'USDC');
-        console.log('Solde USDC emprunté :', btcUsdcData.quoteAsset.borrowed, 'USDC');
-
-        // BTC
-        console.log('Solde BTC disponible :', btcUsdcData.baseAsset.free);
-        console.log('Solde BTC emprunté :', btcUsdcData.baseAsset.borrowed);
+        // const usdcBalance = parseFloat(btcUsdcData.quoteAsset.free);
         
         // Prix actuel BTC / USDC
         const prices = await binance.prices();
@@ -165,36 +157,38 @@ app.post('/webhook', async (req, res) => {
         
         // ****** GESTION POSITION LONGUE  ****** //
         // ACHAT LONG
-        if (action === 'LONG') {            
+        if (action === 'LONG') {           
+            
+            // Récupération de la balance USDC avant l'achat
+            let btcUsdcData = await getBalanceData();
+            const usdcBalance = parseFloat(btcUsdcData.quoteAsset.free);
+            console.log('balance USDC avant position longue =>', usdcBalance);
+            
             await takeLongPosition(binance, symbol, price, usdcBalance, hasOpenLongPosition, lastBuyPrice, bot, chatId);
 
-            const marginAccount = await getIsolatedMarginAccount(
-                process.env.BINANCE_API_KEY,
-                process.env.BINANCE_API_SECRET
-            );
-            
-            const btcUsdcData = marginAccount.assets.find(asset => asset.symbol === 'BTCUSDC');
-            
-            if (!btcUsdcData) {
-                throw new Error('Impossible de récupérer les données pour la paire BTCUSDC.');
-            }
-            
-            // Solde réel en BTC disponible
+            // Récupération de la balance BTC après l'achat
+            btcUsdcData = await getBalanceData();
             const btcBalance = parseFloat(btcUsdcData.baseAsset.free);
             
-            console.log('Solde réel BTC disponible :', btcBalance);
+            console.log('Solde réel BTC après achat :', btcBalance);
 
             // Ordre OCO : gestion des SL et TP en limit
-            await placeOCOOrder(binance, symbol, 'BUY', price, btcBalance);
+            await placeOCOOrder(binance, symbol, 'BUY', price, btcBalance, bot, chatId);
         } 
         
         // ****** GESTION POSITION COURTE  ****** //
         // VENTE SHORT
         else if (action === 'SHORT') {
+
+            // Récupération de la balance USDC avant la vente
+            let btcUsdcData = await getBalanceData();
+            const usdcBalance = parseFloat(btcUsdcData.quoteAsset.free);
+            console.log('balance USDC avant position courte =>', usdcBalance);
+
             const shortOrder = await takeShortPosition(binance, symbol, price, usdcBalance, hasOpenShortPosition, lastSellPrice, shortQuantity, bot, chatId);
 
             // Ordre OCO : gestion des SL et TP en limit
-            await placeOCOOrder(binance, symbol, 'SELL', price, parseFloat(shortOrder.executedQty));
+            await placeOCOOrder(binance, symbol, 'SELL', price, parseFloat(shortOrder.executedQty), bot, chatId);
         } 
 
         res.status(200).send('Ordre effectué avec succès.')

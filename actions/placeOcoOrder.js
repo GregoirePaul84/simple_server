@@ -1,4 +1,4 @@
-const placeOCOOrder = async (binance, symbol, side, price, btcBalance) => {
+const placeOCOOrder = async (binance, symbol, side, price, btcBalance, bot, chatId) => {
     try {
 
         if (btcBalance <= 0) {
@@ -16,15 +16,15 @@ const placeOCOOrder = async (binance, symbol, side, price, btcBalance) => {
 
         const stepSize = 0.00001; // Ajustement selon les règles de la paire
         const adjustedQuantity = Math.floor(btcBalance / stepSize) * stepSize; // Ajuster au stepSize
-        const finalQuantity = adjustedQuantity.toFixed(5); // Garantir 5 décimales
+        // const finalQuantity = adjustedQuantity.toFixed(5); // Garantir 5 décimales
 
-        console.log('Quantité finale ajustée =>', finalQuantity);
+        console.log('Quantité finale ajustée =>', adjustedQuantity);
 
         // Passer l'ordre OCO
         const ocoOrder = await binance.marginOrderOco({
             symbol,
             side: side === 'BUY' ? 'SELL' : 'BUY', // Si on a acheté, on vend pour clôturer
-            quantity: finalQuantity,        // Quantité arrondie
+            quantity: adjustedQuantity,        // Quantité arrondie
             price: takeProfitPrice.toFixed(2),    // Prix du Take Profit
             stopPrice: stopLossPrice.toFixed(2),  // Prix du Stop Loss
             stopLimitPrice: stopLimitPrice.toFixed(2), // Prix limite du Stop Loss
@@ -33,6 +33,15 @@ const placeOCOOrder = async (binance, symbol, side, price, btcBalance) => {
         });
 
         console.log('Ordre OCO passé avec succès :', ocoOrder);
+
+        bot.sendMessage(
+            chatId,
+            `✅ Ordre OCO ajusté :
+            - Take profit : ${takeProfitPrice.toFixed(2)} USDC
+            - Stop loss : ${stopLossPrice.toFixed(2)} USDC
+            - Stop limite : ${stopLimitPrice.toFixed(2)} USDC
+            `
+        );
     } catch (error) {
         console.error('Erreur lors du passage de l\'ordre OCO :', error.response?.data || error.message);
         throw error;

@@ -1,16 +1,15 @@
-const { cancelOpenOrders } = require('./cancelOpenOrders');
-
 // Fonction pour gérer un short
-const takeShortPosition = async(binance, symbol, price, usdcBalance, hasOpenShortPosition, lastSellPrice, shortQuantity, bot, chatId) => {
-
-    await cancelOpenOrders(binance, symbol);
-
-    // Vérifie qu'un ordre n'est pas en cours
-    const openOrders = await binance.openOrders(symbol);
-    if (openOrders.length > 0) {
-        console.error(`Une position est déjà ouverte pour ${symbol}.`);
-        throw new Error(`Une position est déjà ouverte pour ${symbol}.`);
-    }
+const takeShortPosition = async(
+    binance, 
+    symbol, 
+    price, 
+    usdcBalance, 
+    hasOpenShortPosition, 
+    lastSellPrice, 
+    shortQuantity, 
+    bot, 
+    chatId
+) => {
 
     // Vérification du solde USDC pour vendre à découvert
     if (usdcBalance <= 0) {
@@ -18,16 +17,31 @@ const takeShortPosition = async(binance, symbol, price, usdcBalance, hasOpenShor
         throw new Error('Solde insuffisant en USDC pour vendre à découvert.');
     }
 
-    const quantityToSell = (usdcBalance / price).toFixed(6);
+    const stepSize = 0.00001; // StepSize pour BTCUSDC
+    const minQty = 0.00001; // Quantité minimale
+
+    // Calcul et ajustement de la quantité
+    let quantityToSell = (usdcBalance / price).toFixed(8); // Calcul initial
+    quantityToSell = Math.floor(quantityToSell / stepSize) * stepSize; // Ajustement au stepSize
+
+    if (quantityToSell < minQty) {
+        throw new Error('La quantité calculée est inférieure au minimum requis.');
+    }
+
+    const totalOrderValue = quantityToSell * price;
+
+    if (totalOrderValue < 5) {
+        throw new Error('Le montant total de l\'ordre est inférieur au minimum requis de 5 USDC.');
+    }
 
     // Étape 1 : Emprunter des BTC pour vendre à découvert
-    await binance.marginBorrow({
+    const loanResponse = await binance.marginLoan({
         asset: 'BTC',
         amount: quantityToSell,
         isIsolated: true,
         symbol,
     });
-    console.log(`Emprunt de ${quantityToSell} BTC effectué pour ${symbol}.`);
+    console.log(`Emprunt de ${quantityToSell} BTC effectué pour ${symbol}.`, loanResponse);
 
     // Étape 2 : Vendre les BTC empruntés
     const order = await binance.marginOrder({
