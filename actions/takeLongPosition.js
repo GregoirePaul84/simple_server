@@ -20,8 +20,8 @@ const takeLongPosition = async(
     const minQty = 0.00001; // Quantité minimale
 
     // Calcul de la quantité ajustée
-    const quantityToBuy = Math.floor((usdcBalance / price) / stepSize) * stepSize;
-    // quantityToBuy = parseFloat(quantityToBuy.toFixed(5));
+    let quantityToBuy = Math.floor((usdcBalance / price) / stepSize) * stepSize;
+    quantityToBuy = parseFloat(quantityToBuy.toFixed(5));
 
     if (quantityToBuy < minQty) {
         throw new Error('La quantité calculée est inférieure au minimum requis.');
