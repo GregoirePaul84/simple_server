@@ -4,8 +4,6 @@ const takeLongPosition = async(
     symbol, 
     price, 
     usdcBalance, 
-    hasOpenLongPosition, 
-    lastBuyPrice,
     bot,
     chatId
 ) => {
@@ -53,13 +51,14 @@ const takeLongPosition = async(
     const potentialGain = (takeProfit - price) * quantityToBuy;
     const potentialLoss = (price - stopLoss) * quantityToBuy;
     
-    hasOpenLongPosition = true;
-    lastBuyPrice = price;
+    const initialPrice = parseFloat(order.fills[0]?.price); // Récupère le prix d'exécution
+    console.log(`Prix d'entrée enregistré : ${initialPrice}`);
 
     bot.sendMessage(
         chatId,
         `✅ Ordre d'achat exécuté :
         - Symbole : ${symbol}
+        - Prix d'achat: ${price} USDC
         - Capital investi : ${usdcBalance.toFixed(2)} USDC
         - Quantité achetée : ${quantityToBuy} BTC
         - Gain potentiel : +${potentialGain.toFixed(2)} USDC
@@ -67,7 +66,7 @@ const takeLongPosition = async(
         `
     );
 
-    return order;
+    return { order, initialPrice };
 }
 
 module.exports = { takeLongPosition };

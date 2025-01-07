@@ -4,9 +4,6 @@ const takeShortPosition = async(
     symbol, 
     price, 
     usdcBalance, 
-    hasOpenShortPosition, 
-    lastSellPrice, 
-    shortQuantity, 
     bot, 
     chatId
 ) => {
@@ -21,7 +18,7 @@ const takeShortPosition = async(
     const minQty = 0.00001; // Quantité minimale
 
     // Calcul et ajustement de la quantité
-    let quantityToSell = (usdcBalance / price).toFixed(8); // Calcul initial
+    let quantityToSell = (usdcBalance / price).toFixed(5); // Calcul initial
     quantityToSell = Math.floor(quantityToSell / stepSize) * stepSize; // Ajustement au stepSize
 
     if (quantityToSell < minQty) {
@@ -62,14 +59,14 @@ const takeShortPosition = async(
     const potentialGain = (price - takeProfit) * quantityToSell; // Gain potentiel
     const potentialLoss = (stopLoss - price) * quantityToSell; // Perte potentielle
 
-    hasOpenShortPosition = true; // Une position short est ouverte
-    lastSellPrice = price; // Prix de la position
-    shortQuantity = quantityToSell; 
+    const initialPrice = parseFloat(order.fills[0]?.price); // Récupère le prix d'exécution
+    console.log(`Prix d'entrée enregistré : ${initialPrice}`);
 
     bot.sendMessage(
         chatId,
         `✅ Ordre de vente à découvert exécuté :
         - Symbole : ${symbol}
+        - Prix de vente: ${price} USDC
         - Capital investi : ${usdcBalance.toFixed(2)} USDC
         - Quantité vendue: ${quantityToSell}
         - Gain potentiel : +${potentialGain.toFixed(2)} USDC
@@ -77,7 +74,7 @@ const takeShortPosition = async(
         `
     );  
 
-    return order;
+    return { order, initialPrice };
 }
 
 module.exports = { takeShortPosition };

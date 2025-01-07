@@ -10,6 +10,10 @@ const { takeLongPosition } = require('./actions/takeLongPosition');
 const { takeShortPosition } = require('./actions/takeShortPosition');
 const { placeOCOOrder } = require('./actions/placeOcoOrder');
 const { scheduleMonthlyReport, sendMonthlyReport } = require('./monthlyReport'); // Import du fichier pour le rapport mensuel
+const { handleCloseLong } = require('./actions/handleCloseLong');
+const { handleCloseShort } = require('./actions/handleCloseShort');
+const { sendDailyStatusUpdate } = require('./sendDailyStatusUpdate');
+const schedule = require('node-schedule'); // Librairie pour le planificateur
 
 // Configuration de Telegram
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
@@ -35,14 +39,31 @@ const binance = Binance({
 });
 
 // Variables de base
-let hasOpenLongPosition = false; // Position longue en cours ou non
-let hasOpenShortPosition = false; // Position short en cours ou non
-let lastBuyPrice = null; // Dernier prix d'achat
-let lastSellPrice = null; // Dernier prix de short
+let initialPrice = null; // Prix initial de la position
 let shortQuantity = null; // Nombre de BTC vendus à découvert pour le short
-let totalProfitCumulative = 0; // Total depuis le début
 let totalProfitMonthly = 0; // Total du mois en cours
-const initialCapital = 102.69752060; // Capital initial en USDC
+let totalProfitCumulative = 0; // Total depuis le début
+const initialCapital = 50; // Capital initial en USDC
+
+// Connecter le WebSocket utilisateur pour détecter le passage des ordres OCO
+binance.ws.user((message) => {
+    if (message.eventType === 'executionReport' && message.orderStatus === 'FILLED') {
+        if (message.orderType === 'STOP_LOSS_LIMIT' || message.orderType === 'LIMIT_MAKER') {
+            console.log(`Ordre OCO exécuté : ${message.side} pour ${message.symbol}`);
+            console.log(`Prix exécuté : ${message.price}`);
+            console.log(`Quantité exécutée : ${message.quantity}`);
+
+            const executedPrice = parseFloat(message.price);
+            const executedQuantity = parseFloat(message.quantity);
+
+            if (message.side === 'SELL') {
+                handleCloseLong(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
+            } else if (message.side === 'BUY') {
+                handleCloseShort(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
+            }
+        }
+    }
+});
 
 // Setter pour réinitialiser les profits mensuels
 const resetMonthlyProfit = () => {
@@ -149,7 +170,9 @@ app.post('/webhook', async (req, res) => {
             const usdcBalance = parseFloat(btcUsdcData.quoteAsset.free);
             console.log('balance USDC avant position longue =>', usdcBalance);
             
-            await takeLongPosition(binance, symbol, price, usdcBalance, hasOpenLongPosition, lastBuyPrice, bot, chatId);
+            const longOrder = await takeLongPosition(binance, symbol, price, usdcBalance, bot, chatId);
+
+            initialPrice = longOrder.initialPrice;
 
             // Récupération de la balance BTC après l'achat
             btcUsdcData = await getBalanceData();
@@ -170,10 +193,10 @@ app.post('/webhook', async (req, res) => {
             const usdcBalance = parseFloat(btcUsdcData.quoteAsset.free);
             console.log('balance USDC avant position courte =>', usdcBalance);
 
-            const shortOrder = await takeShortPosition(binance, symbol, price, usdcBalance, hasOpenShortPosition, lastSellPrice, shortQuantity, bot, chatId);
+            const shortOrder = await takeShortPosition(binance, symbol, price, usdcBalance, shortQuantity, bot, chatId);
 
             // Ordre OCO : gestion des SL et TP en limit
-            await placeOCOOrder(binance, symbol, 'SELL', price, parseFloat(shortOrder.executedQty), bot, chatId);
+            await placeOCOOrder(binance, symbol, 'SELL', price, parseFloat(shortOrder.order.executedQty), bot, chatId);
         } 
 
         res.status(200).send('Ordre effectué avec succès.')
@@ -204,3 +227,9 @@ app.listen(port, () => {
 
 // Planification du rapport mensuel
 scheduleMonthlyReport(bot, chatId, () => totalProfitCumulative, () => totalProfitMonthly, resetMonthlyProfit);
+
+// Planificateur pour exécuter la notification quotidienne à minuit
+schedule.scheduleJob('0 0 * * *', async () => {
+    console.log('Envoi du rapport quotidien...');
+    await sendDailyStatusUpdate(bot, chatId);
+});

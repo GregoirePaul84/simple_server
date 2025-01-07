@@ -1,94 +1,82 @@
 const { getGainMessage, getLossMessage } = require('../botmessages');
+const { getIsolatedMarginAccount } = require('../getIsolatedMarginAccount');
 
 // Fonction pour gérer une vente
-const handleCloseShort = async(
-    binance, 
-    symbol, 
-    price, 
-    usdcBalance, 
-    hasOpenShortPosition, 
-    lastSellPrice, 
-    initialCapital, 
-    shortQuantity, 
-    totalProfitCumulative, 
-    totalProfitMonthly, 
-    bot, 
+const handleCloseShort = async (
+    initialPrice,
+    executedPrice,
+    executedQuantity,
+    initialCapital,
+    totalProfitCumulative,
+    totalProfitMonthly,
+    bot,
     chatId
 ) => {
-
-    // Vérification qu'une position courte existe
-    if (!hasOpenShortPosition || !shortQuantity || shortQuantity <= 0) {
-        console.error('Pas de position courte ouverte. Clôture non autorisé.');
-        throw new Error('Pas de position courte ouverte. Clôture non autorisé.');
+    if (!initialPrice || !executedPrice || !executedQuantity) {
+        console.error('Données manquantes pour calculer les profits ou pertes.');
+        bot.sendMessage(
+            chatId,
+            `✅ Short clôturé : Données manquantes pour calculer les profits ou pertes.`
+        );
+        return;
     }
 
-    // Racheter les actifs empruntés (BTC)
-    const order = await binance.marginOrder({
-        symbol,
-        side: 'BUY',
-        type: 'MARKET',
-        quantity: shortQuantity,
-        isIsolated: true, // Spécifie que c'est une opération de marge isolée
-    });
+    // Récupération des balances actuelles après clôture potentielle (via OCO)
+    const marginAccount = await getIsolatedMarginAccount(
+        process.env.BINANCE_API_KEY,
+        process.env.BINANCE_API_SECRET
+    );
 
-    console.log('Ordre d\'achat pour clôturer le short effectué.', order);
+    const btcUsdcData = marginAccount.assets.find(asset => asset.symbol === 'BTCUSDC');
 
-    // Rembourser les BTC empruntés
-    await binance.marginRepay({
-        asset: 'BTC',
-        amount: shortQuantity,
-        isIsolated: true,
-        symbol,
-    });
-    
-    console.log(`Remboursement de ${shortQuantity} BTC effectué.`);
+    if (!btcUsdcData) {
+        throw new Error('Impossible de récupérer les données pour la paire BTCUSDC.');
+    }
 
-    if (lastSellPrice) {
-        const profit = ((lastSellPrice - price) * shortQuantity).toFixed(2); // Profit ou perte de la transaction en USDC
-        const profitPercentage = (((lastSellPrice - price) / lastSellPrice) * 100).toFixed(2); // Pourcentage de la transaction
+    const newUsdcBalance = parseFloat(btcUsdcData.quoteAsset.free);
+    const newBtcBalance = parseFloat(btcUsdcData.baseAsset.free);
 
-        totalProfitCumulative += parseFloat(profit); // Profit cumulé depuis le début
-        totalProfitMonthly += parseFloat(profit); // Profit cumulé depuis le mois
+    const profitOrLoss = ((initialPrice - executedPrice) * executedQuantity).toFixed(2);
+    const profitPercentage = (((initialPrice - executedPrice) / initialPrice) * 100).toFixed(2);
 
-        const totalProfitCumulativePercentage = ((totalProfitCumulative / initialCapital) * 100).toFixed(2); // Pourcentage cumulé depuis le début
-        const totalProfitMonthlyPercentage = ((totalProfitMonthly / initialCapital) * 100).toFixed(2); // Pourcentage cumulé depuis le mois
+    console.log(`Profit ou Perte : ${profitOrLoss} USDC, ${profitPercentage}%`);
 
-        const minusOrPlusCumulative = totalProfitCumulative >= 0 ? '+' : '';
-        const minusOrPlusMonthly = totalProfitMonthly >= 0 ? '+' : '';
+    totalProfitMonthly += parseFloat(profitOrLoss);
+    totalProfitCumulative += parseFloat(profitOrLoss);
 
-        profit >= 0  
-            ? bot.sendMessage(
-                chatId,
-                `✅ Short clôturé : PAYÉ ! 🤑🤑🤑🤑\n\n` +
-                `- Symbole : BTC / USDC\n` +
-                `- Gain réalisé 💶 : +${profit} USDC\n` +
-                `- Pourcentage réalisé 📊 : +${profitPercentage} %\n\n` +
-                `- Gains mensuels 💰 : ${minusOrPlusMonthly}${totalProfitMonthly.toFixed(2)} USDC, ${minusOrPlusMonthly}${totalProfitMonthlyPercentage} %\n` +
-                `- Gains totaux 💰💰 : ${minusOrPlusCumulative}${totalProfitCumulative.toFixed(2)} USDC, ${minusOrPlusCumulative}${totalProfitCumulativePercentage} %\n\n` +
-                `- Capital disponible 💎 : ${usdcBalance.toFixed(2)} USDC\n\n` +
-                `💪 ${getGainMessage()}`
-            )
-            : bot.sendMessage(
-                chatId,
-                `✅ Short clôturé : Pas payé. 💩\n\n` +
-                `- Symbole : BTC / USDC\n` +
-                `- Perte réalisée 💩 : -${Math.abs(profit)} USDC\n` +
-                `- Pourcentage réalisé 📊 : ${profitPercentage} %\n\n` +
-                `- Gains mensuels 💰 : ${minusOrPlusMonthly}${totalProfitMonthly.toFixed(2)} USDC, ${minusOrPlusMonthly}${totalProfitMonthlyPercentage} %\n` +
-                `- Gains totaux 💰💰 : ${minusOrPlusCumulative}${totalProfitCumulative.toFixed(2)} USDC, ${minusOrPlusCumulative}${totalProfitCumulativePercentage} %\n\n` +
-                `- Capital disponible 💎 : ${usdcBalance} USDC\n\n` +
-                `🧘 ${getLossMessage()}`
-            )
+    const totalProfitMonthlyPercentage = ((totalProfitMonthly / initialCapital) * 100).toFixed(2);
+    const totalProfitCumulativePercentage = ((totalProfitCumulative / initialCapital) * 100).toFixed(2);
+
+    const minusOrPlusMonthly = totalProfitMonthly >= 0 ? '+' : '';
+    const minusOrPlusCumulative = totalProfitCumulative >= 0 ? '+' : '';
+
+    if (profitOrLoss >= 0) {
+        bot.sendMessage(
+            chatId,
+            `✅ Short clôturé : PAYÉ ! 🤑🤑🤑🤑\n\n` +
+            `- Symbole : BTC / USDC\n` +
+            `- Gain réalisé 💶 : +${profitOrLoss} USDC\n` +
+            `- Pourcentage réalisé 📊 : +${profitPercentage} %\n\n` +
+            `- Gains mensuels 💰 : ${minusOrPlusMonthly}${totalProfitMonthly.toFixed(2)} USDC, ${minusOrPlusMonthly}${totalProfitMonthlyPercentage} %\n` +
+            `- Gains totaux 💰💰 : ${minusOrPlusCumulative}${totalProfitCumulative.toFixed(2)} USDC, ${minusOrPlusCumulative}${totalProfitCumulativePercentage} %\n\n` +
+            `- Capital disponible 💎 : ${newUsdcBalance.toFixed(2)} USDC, ${newBtcBalance} BTC\n\n` +
+            `💪 ${getGainMessage()}`
+        );
     } else {
         bot.sendMessage(
             chatId,
-            `✅ Short clôturé : Pas de données disponibles. Merci de vérifier les transactions.`
+            `✅ Short clôturé : Pas payé. 💩\n\n` +
+            `- Symbole : BTC / USDC\n` +
+            `- Perte réalisée 💩 : -${Math.abs(profitOrLoss)} USDC\n` +
+            `- Pourcentage réalisé 📊 : ${profitPercentage} %\n\n` +
+            `- Gains mensuels 💰 : ${minusOrPlusMonthly}${totalProfitMonthly.toFixed(2)} USDC, ${minusOrPlusMonthly}${totalProfitMonthlyPercentage} %\n` +
+            `- Gains totaux 💰💰 : ${minusOrPlusCumulative}${totalProfitCumulative.toFixed(2)} USDC, ${minusOrPlusCumulative}${totalProfitCumulativePercentage} %\n\n` +
+            `- Capital disponible 💎 : ${newUsdcBalance.toFixed(2)} USDC, ${newBtcBalance} BTC\n\n` +
+            `🧘 ${getLossMessage()}`
         );
     }
 
-    hasOpenShortPosition = false;
-    lastSellPrice = null;
-    shortQuantity = null;
-}
+    initialPrice = null;
+};
 
 module.exports = { handleCloseShort };
