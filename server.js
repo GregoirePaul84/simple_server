@@ -34,7 +34,7 @@ const binance = Binance({
     apiSecret: process.env.BINANCE_API_SECRET,
     // family: 4, // Forcer l'utilisation d'IPv4
     // useServerTime: true, // Synchronisation avec l'heure du serveur Binance
-    // reconnect: true, // Permet de se reconnecter automatiquement
+    reconnect: true, // Permet de se reconnecter automatiquement
     verbose: true, // Affiche les logs pour aider au débogage
 });
 
@@ -47,21 +47,26 @@ const initialCapital = 50; // Capital initial en USDC
 
 // Connecter le WebSocket utilisateur pour détecter le passage des ordres OCO
 binance.ws.user((message) => {
-    if (message.eventType === 'executionReport' && message.orderStatus === 'FILLED') {
-        if (message.orderType === 'STOP_LOSS_LIMIT' || message.orderType === 'LIMIT_MAKER') {
-            console.log(`Ordre OCO exécuté : ${message.side} pour ${message.symbol}`);
-            console.log(`Prix exécuté : ${message.price}`);
-            console.log(`Quantité exécutée : ${message.quantity}`);
-
-            const executedPrice = parseFloat(message.price);
-            const executedQuantity = parseFloat(message.quantity);
-
-            if (message.side === 'SELL') {
-                handleCloseLong(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
-            } else if (message.side === 'BUY') {
-                handleCloseShort(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
+    console.log('Message WebSocket reçu :', message);
+    try {
+        if (message.eventType === 'executionReport' && message.orderStatus === 'FILLED') {
+            if (message.orderType === 'STOP_LOSS_LIMIT' || message.orderType === 'LIMIT_MAKER') {
+                console.log(`Ordre OCO exécuté : ${message.side} pour ${message.symbol}`);
+                console.log(`Prix exécuté : ${message.price}`);
+                console.log(`Quantité exécutée : ${message.quantity}`);
+    
+                const executedPrice = parseFloat(message.price);
+                const executedQuantity = parseFloat(message.quantity);
+    
+                if (message.side === 'SELL') {
+                    handleCloseLong(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
+                } else if (message.side === 'BUY') {
+                    handleCloseShort(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
+                }
             }
         }
+    } catch (error) {
+        console.error('Erreur dans le WebSocket :', error);
     }
 });
 
