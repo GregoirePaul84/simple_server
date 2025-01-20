@@ -14,6 +14,8 @@ const { handleCloseLong } = require('./actions/handleCloseLong');
 const { handleCloseShort } = require('./actions/handleCloseShort');
 const { sendDailyStatusUpdate } = require('./sendDailyStatusUpdate');
 const schedule = require('node-schedule'); // Librairie pour le planificateur
+const WebSocket = require('ws');
+const { getListenKey, keepAliveListenKey } = require('./websocket');
 
 // Configuration de Telegram
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
@@ -46,29 +48,44 @@ let totalProfitCumulative = 0; // Total depuis le début
 const initialCapital = 50; // Capital initial en USDC
 
 // Connecter le WebSocket utilisateur pour détecter le passage des ordres OCO
-binance.ws.user((message) => {
-    console.log('Message WebSocket reçu :', message);
-    try {
-        if (message.eventType === 'executionReport' && message.orderStatus === 'FILLED') {
-            if (message.orderType === 'STOP_LOSS_LIMIT' || message.orderType === 'LIMIT_MAKER') {
-                console.log(`Ordre OCO exécuté : ${message.side} pour ${message.symbol}`);
-                console.log(`Prix exécuté : ${message.price}`);
-                console.log(`Quantité exécutée : ${message.quantity}`);
-    
-                const executedPrice = parseFloat(message.price);
-                const executedQuantity = parseFloat(message.quantity);
-    
-                if (message.side === 'SELL') {
+const startUserWebSocket = async () => {
+    const listenKey = await getListenKey();
+    const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${listenKey}`);
+
+    ws.on('message', (data) => {
+        const message = JSON.parse(data);
+        console.log('Message WebSocket reçu :', message);
+
+        if (message.e === 'executionReport' && message.X === 'FILLED') {
+            if (message.o === 'STOP_LOSS_LIMIT' || message.o === 'LIMIT_MAKER') {
+                console.log(`Ordre OCO exécuté : ${message.S} pour ${message.s}`);
+                console.log(`Prix exécuté : ${message.p}`);
+                console.log(`Quantité exécutée : ${message.q}`);
+
+                const executedPrice = parseFloat(message.p);
+                const executedQuantity = parseFloat(message.q);
+
+                if (message.S === 'SELL') {
                     handleCloseLong(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
-                } else if (message.side === 'BUY') {
+                } else if (message.S === 'BUY') {
                     handleCloseShort(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
                 }
             }
         }
-    } catch (error) {
-        console.error('Erreur dans le WebSocket :', error);
-    }
-});
+    });
+
+    ws.on('error', (err) => {
+        console.error('Erreur WebSocket :', err);
+    });
+
+    ws.on('close', () => {
+        console.log('WebSocket fermé. Reconnexion...');
+        startUserWebSocket(); // Reconnecter automatiquement
+    });
+
+    // Renouveler le listenKey toutes les 50 minutes
+    setInterval(() => keepAliveListenKey(listenKey), 50 * 60 * 1000);
+};
 
 // Setter pour réinitialiser les profits mensuels
 const resetMonthlyProfit = () => {
@@ -224,11 +241,12 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
-
 // Lancer le serveur
 app.listen(port, () => {
     console.log(`Serveur en cours d'exécution sur ${externalURL}`);
 });
+
+startUserWebSocket();
 
 // Planification du rapport mensuel
 scheduleMonthlyReport(bot, chatId, () => totalProfitCumulative, () => totalProfitMonthly, resetMonthlyProfit);
