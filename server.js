@@ -15,7 +15,7 @@ const { handleCloseShort } = require('./actions/handleCloseShort');
 const { sendDailyStatusUpdate } = require('./sendDailyStatusUpdate');
 const schedule = require('node-schedule'); // Librairie pour le planificateur
 const WebSocket = require('ws');
-const { getListenKey, keepAliveListenKey } = require('./websocket');
+const { getIsolatedMarginListenKey, keepAliveMarginListenKey } = require('./websocket');
 
 // Configuration de Telegram
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
@@ -49,8 +49,12 @@ const initialCapital = 50; // Capital initial en USDC
 
 // Connecter le WebSocket utilisateur pour détecter le passage des ordres OCO
 const startUserWebSocket = async () => {
-    const listenKey = await getListenKey();
+    const listenKey = await getIsolatedMarginListenKey('BTCUSDC'); 
     const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${listenKey}`);
+
+    ws.on('open', () => {
+        console.log('WebSocket connecté.');
+    });
 
     ws.on('message', (data) => {
         const message = JSON.parse(data);
@@ -84,7 +88,7 @@ const startUserWebSocket = async () => {
     });
 
     // Renouveler le listenKey toutes les 50 minutes
-    setInterval(() => keepAliveListenKey(listenKey), 50 * 60 * 1000);
+    setInterval(() => keepAliveMarginListenKey(listenKey), 50 * 60 * 1000);
 };
 
 // Setter pour réinitialiser les profits mensuels
