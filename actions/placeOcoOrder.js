@@ -7,9 +7,9 @@ const placeOCOOrder = async (binance, symbol, side, price, btcBalance, bot, chat
         
         // Calcul du Take Profit et Stop Loss
         const stopLossPercentLong = 5.3; // Stop Loss pour LONG
-        const takeProfitPercentLong = 8.7; // Take Profit pour LONG
-        const stopLossPercentShort = 5.4; // Stop Loss pour SHORT
-        const takeProfitPercentShort = 8.9; // Take Profit pour SHORT
+        const takeProfitPercentLong = 8.62; // Take Profit pour LONG
+        const stopLossPercentShort = 5.24; // Stop Loss pour SHORT
+        const takeProfitPercentShort = 8.98; // Take Profit pour SHORT
 
         // Calcul des prix
         const takeProfitPrice = side === 'BUY' 
