@@ -16,6 +16,7 @@ const { sendDailyStatusUpdate } = require('./sendDailyStatusUpdate');
 const schedule = require('node-schedule'); // Librairie pour le planificateur
 const WebSocket = require('ws');
 const { getIsolatedMarginListenKey, keepAliveMarginListenKey } = require('./websocket');
+const { checkArbitrageOpportunity, updateUsdtBalance } = require('./actions/arbitrage');
 
 // Configuration de Telegram
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
@@ -30,12 +31,18 @@ const port = 3000;
 // Middleware pour traiter les JSON reçus par tradingview
 app.use(bodyParser.json());
 
-// Configuration de Binance API
-const binance = Binance({
-    apiKey: process.env.BINANCE_API_KEY,
-    apiSecret: process.env.BINANCE_API_SECRET,
-    // family: 4, // Forcer l'utilisation d'IPv4
-    // useServerTime: true, // Synchronisation avec l'heure du serveur Binance
+// Configuration de Binance API pour le swing trading
+const binanceMargin = Binance({
+    apiKey: process.env.BINANCE_MARGIN_API_KEY,
+    apiSecret: process.env.BINANCE_MARGIN_API_SECRET,
+    reconnect: true, // Permet de se reconnecter automatiquement
+    verbose: true, // Affiche les logs pour aider au débogage
+});
+
+// Configuration de Binance API pour l'arbitrage
+const binanceSpot = Binance({
+    apiKey: process.env.BINANCE_SPOT_API_KEY,
+    apiSecret: process.env.BINANCE_SPOT_API_SECRET,
     reconnect: true, // Permet de se reconnecter automatiquement
     verbose: true, // Affiche les logs pour aider au débogage
 });
@@ -141,8 +148,8 @@ app.get('/balance', async (_, res) => {
     try {
         // Appel à l'API pour récupérer le portefeuille de marge isolée
         const data = await getIsolatedMarginAccount(
-            process.env.BINANCE_API_KEY,
-            process.env.BINANCE_API_SECRET
+            process.env.BINANCE_MARGIN_API_KEY,
+            process.env.BINANCE_MARGIN_API_SECRET
         );
 
         // Recherche de la paire BTCUSDT
@@ -182,7 +189,7 @@ app.post('/webhook', async (req, res) => {
         console.log('début du webhook');
         
         // Prix actuel BTC / USDC
-        const prices = await binance.prices();
+        const prices = await binanceMargin.prices();
         const price = parseFloat(prices[symbol]);
 
         console.log(`Prix actuel du BTC => ${price}USDC`);
@@ -196,7 +203,7 @@ app.post('/webhook', async (req, res) => {
             const usdcBalance = parseFloat(btcUsdcData.quoteAsset.free);
             console.log('balance USDC avant position longue =>', usdcBalance);
             
-            const longOrder = await takeLongPosition(binance, symbol, price, usdcBalance, bot, chatId);
+            const longOrder = await takeLongPosition(binanceMargin, symbol, price, usdcBalance, bot, chatId);
 
             initialPrice = longOrder.initialPrice;
 
@@ -207,7 +214,7 @@ app.post('/webhook', async (req, res) => {
             console.log('Solde réel BTC après achat :', btcBalance);
 
             // Ordre OCO : gestion des SL et TP en limit
-            await placeOCOOrder(binance, symbol, 'BUY', price, btcBalance, bot, chatId);
+            await placeOCOOrder(binanceMargin, symbol, 'BUY', price, btcBalance, bot, chatId);
         } 
         
         // ****** GESTION POSITION COURTE  ****** //
@@ -219,10 +226,10 @@ app.post('/webhook', async (req, res) => {
             const usdcBalance = parseFloat(btcUsdcData.quoteAsset.free);
             console.log('balance USDC avant position courte =>', usdcBalance);
 
-            const shortOrder = await takeShortPosition(binance, symbol, price, usdcBalance, shortQuantity, bot, chatId);
+            const shortOrder = await takeShortPosition(binanceMargin, symbol, price, usdcBalance, shortQuantity, bot, chatId);
 
             // Ordre OCO : gestion des SL et TP en limit
-            await placeOCOOrder(binance, symbol, 'SELL', price, parseFloat(shortOrder.order.executedQty), bot, chatId);
+            await placeOCOOrder(binanceMargin, symbol, 'SELL', price, parseFloat(shortOrder.order.executedQty), bot, chatId);
         } 
 
         res.status(200).send('Ordre effectué avec succès.')
@@ -245,18 +252,34 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
+const getTradingRules = async () => {
+    const exchangeInfo = await binanceSpot.exchangeInfo();
+    const btcUsdtRules = exchangeInfo.symbols.find((symbol) => symbol.symbol === 'BTCUSDT');
+    console.log(btcUsdtRules.filters);
+};
+
+const scheduleDailyReport = async () => {
+    schedule.scheduleJob('0 0 * * *', async () => {
+        console.log('Envoi du rapport quotidien...');
+        await sendDailyStatusUpdate(bot, chatId);
+    });
+}
+
 // Lancer le serveur
 app.listen(port, () => {
     console.log(`Serveur en cours d'exécution sur ${externalURL}`);
 });
 
-startUserWebSocket();
 
-// Planification du rapport mensuel
-scheduleMonthlyReport(bot, chatId, () => totalProfitCumulative, () => totalProfitMonthly, resetMonthlyProfit);
+const init = () => {
+    startUserWebSocket(); // Données de Binance
+    getTradingRules(); // Règles USDT/BTC Binance
+    scheduleDailyReport(); // Rapport journalier à minuit
+    scheduleMonthlyReport(bot, chatId, () => totalProfitCumulative, () => totalProfitMonthly, resetMonthlyProfit); // Rapport Telegram mensuel
+    setInterval(() => updateUsdtBalance(binanceSpot), 30 * 1000); // Mettre à jour la balance USDT toutes les 30 secondes
+    setInterval(() => checkArbitrageOpportunity(binanceSpot, bot, chatId), 2000); // Détecte les opportunités d'arbitrage toutes les 2 secondes
+}
 
-// Planificateur pour exécuter la notification quotidienne à minuit
-schedule.scheduleJob('0 0 * * *', async () => {
-    console.log('Envoi du rapport quotidien...');
-    await sendDailyStatusUpdate(bot, chatId);
-});
+init();
+
+

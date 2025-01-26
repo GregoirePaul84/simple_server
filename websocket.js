@@ -6,7 +6,7 @@ const getIsolatedMarginListenKey = async (symbol) => {
         const response = await axios.post(
             `https://api.binance.com/sapi/v1/userDataStream/isolated?symbol=${symbol}`,
             null,
-            { headers: { 'X-MBX-APIKEY': process.env.BINANCE_API_KEY } }
+            { headers: { 'X-MBX-APIKEY': process.env.BINANCE_MARGIN_API_KEY } }
         );
 
         if (!response.data || !response.data.listenKey) {
@@ -28,7 +28,7 @@ const keepAliveMarginListenKey = async (listenKey) => {
             `https://api.binance.com/sapi/v1/userDataStream`,
             null,
             {
-                headers: { 'X-MBX-APIKEY': process.env.BINANCE_API_KEY },
+                headers: { 'X-MBX-APIKEY': process.env.BINANCE_MARGIN_API_KEY },
                 params: { listenKey },
             }
         );
