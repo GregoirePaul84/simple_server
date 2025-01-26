@@ -20,7 +20,7 @@ const checkArbitrageOpportunity = async (binance, bot, chatId) => {
 
         // Vérifier si le cooldown est terminé
         if (currentTime - lastArbitrageTime < cooldownTime) {
-            console.log(`En cooldown. Temps restant : ${(cooldownTime - (currentTime - lastArbitrageTime)) / 1000}s`);
+            // console.log(`En cooldown. Temps restant : ${(cooldownTime - (currentTime - lastArbitrageTime)) / 1000}s`);
             return;
         }
 
@@ -49,9 +49,9 @@ const checkArbitrageOpportunity = async (binance, bot, chatId) => {
         const minimumProfitPercentage = 0.2; // Marge de 0.2% nette après frais
         const minimumProfitNet = (initialUsdt * (minimumProfitPercentage + totalFeesRate * 100)) / 100;
 
-        console.log(`Montant final : ${finalUsdt.toFixed(2)} USDT`);
-        console.log(`Profit brut potentiel : ${profit.toFixed(2)} USDT`);
-        console.log(`Profit minimum requis après frais : ${minimumProfitNet.toFixed(2)} USDT`);
+        // console.log(`Montant final : ${finalUsdt.toFixed(2)} USDT`);
+        // console.log(`Profit brut potentiel : ${profit.toFixed(2)} USDT`);
+        // console.log(`Profit minimum requis après frais : ${minimumProfitNet.toFixed(2)} USDT`);
 
         // Vérification du profit net
         if (profit > minimumProfitNet) {
