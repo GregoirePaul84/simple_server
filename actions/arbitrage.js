@@ -7,7 +7,6 @@ const updateUsdtBalance = async (binance) => {
         const accountInfo = await binance.accountInfo();
         const usdtAsset = accountInfo.balances.find((asset) => asset.asset === 'USDT');
         usdtBalance = parseFloat(usdtAsset.free);
-        console.log(`Solde USDT mis à jour : ${usdtBalance.toFixed(2)} USDT`);
     } catch (error) {
         console.error('Erreur lors de la récupération de la balance USDT :', error.message);
     }
@@ -62,9 +61,8 @@ const checkArbitrageOpportunity = async (binance, bot, chatId) => {
 
             // Mettre à jour le timestamp du dernier arbitrage
             lastArbitrageTime = Date.now();
-        } else {
-            console.log('Aucune opportunité détectée pour le moment.');
-        }
+        } 
+
     } catch (error) {
         console.error('Erreur lors de la vérification des opportunités d\'arbitrage :', error.message);
         bot.sendMessage(chatId, `❌ Erreur lors de la vérification des opportunités : ${error.message}`);

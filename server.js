@@ -252,12 +252,6 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
-const getTradingRules = async () => {
-    const exchangeInfo = await binanceSpot.exchangeInfo();
-    const btcUsdtRules = exchangeInfo.symbols.find((symbol) => symbol.symbol === 'BTCUSDT');
-    console.log(btcUsdtRules.filters);
-};
-
 const scheduleDailyReport = async () => {
     schedule.scheduleJob('0 0 * * *', async () => {
         console.log('Envoi du rapport quotidien...');
@@ -273,7 +267,6 @@ app.listen(port, () => {
 
 const init = () => {
     startUserWebSocket(); // Données de Binance
-    getTradingRules(); // Règles USDT/BTC Binance
     scheduleDailyReport(); // Rapport journalier à minuit
     scheduleMonthlyReport(bot, chatId, () => totalProfitCumulative, () => totalProfitMonthly, resetMonthlyProfit); // Rapport Telegram mensuel
     setInterval(() => updateUsdtBalance(binanceSpot), 30 * 1000); // Mettre à jour la balance USDT toutes les 30 secondes
