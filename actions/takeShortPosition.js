@@ -22,7 +22,6 @@ const takeShortPosition = async (
 
     // Calcul de la quantité de BTC à emprunter en fonction du solde USDC
     let quantityToSell = (usdcBalance / price) * marginForFees; // Ajuster pour les frais
-    quantityToSell = (quantityToSell / 2); // Diviser par deux pour limiter l'emprunt
     quantityToSell = (Math.floor(quantityToSell / stepSize) * stepSize).toFixed(5); // Ajustement au stepSize
 
     if (quantityToSell < minQty) {
