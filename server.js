@@ -16,7 +16,7 @@ const { sendDailyStatusUpdate } = require('./sendDailyStatusUpdate');
 const schedule = require('node-schedule'); // Librairie pour le planificateur
 const WebSocket = require('ws');
 const { getIsolatedMarginListenKey, keepAliveMarginListenKey } = require('./websocket');
-const { checkArbitrageOpportunity, updateUsdtBalance } = require('./actions/arbitrage');
+// const { checkArbitrageOpportunity, updateUsdtBalance } = require('./actions/arbitrage');
 
 // Configuration de Telegram
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
@@ -39,17 +39,16 @@ const binanceMargin = Binance({
     verbose: true, // Affiche les logs pour aider au débogage
 });
 
-// Configuration de Binance API pour l'arbitrage
-const binanceSpot = Binance({
-    apiKey: process.env.BINANCE_SPOT_API_KEY,
-    apiSecret: process.env.BINANCE_SPOT_API_SECRET,
-    reconnect: true, // Permet de se reconnecter automatiquement
-    verbose: true, // Affiche les logs pour aider au débogage
-});
+// // Configuration de Binance API pour l'arbitrage
+// const binanceSpot = Binance({
+//     apiKey: process.env.BINANCE_SPOT_API_KEY,
+//     apiSecret: process.env.BINANCE_SPOT_API_SECRET,
+//     reconnect: true, // Permet de se reconnecter automatiquement
+//     verbose: true, // Affiche les logs pour aider au débogage
+// });
 
 // Variables de base
 let initialPrice = null; // Prix initial de la position
-let shortQuantity = null; // Nombre de BTC vendus à découvert pour le short
 let totalProfitMonthly = 0; // Total du mois en cours
 let totalProfitCumulative = 0; // Total depuis le début
 const initialCapital = 50; // Capital initial en USDC
@@ -220,14 +219,14 @@ app.post('/webhook', async (req, res) => {
         // ****** GESTION POSITION COURTE  ****** //
         // VENTE SHORT
         else if (action === 'SHORT') {
-
+            
             // Récupération de la balance USDC avant la vente
             let btcUsdcData = await getBalanceData();
             const usdcBalance = parseFloat(btcUsdcData.quoteAsset.free);
             console.log('balance USDC avant position courte =>', usdcBalance);
 
-            const shortOrder = await takeShortPosition(binanceMargin, symbol, price, usdcBalance, shortQuantity, bot, chatId);
-
+            const shortOrder = await takeShortPosition(binanceMargin, symbol, price, usdcBalance, bot, chatId);
+            
             // Ordre OCO : gestion des SL et TP en limit
             await placeOCOOrder(binanceMargin, symbol, 'SELL', price, parseFloat(shortOrder.order.executedQty), bot, chatId);
         } 
@@ -269,8 +268,8 @@ const init = () => {
     startUserWebSocket(); // Données de Binance
     scheduleDailyReport(); // Rapport journalier à minuit
     scheduleMonthlyReport(bot, chatId, () => totalProfitCumulative, () => totalProfitMonthly, resetMonthlyProfit); // Rapport Telegram mensuel
-    setInterval(() => updateUsdtBalance(binanceSpot), 30 * 1000); // Mettre à jour la balance USDT toutes les 30 secondes
-    setInterval(() => checkArbitrageOpportunity(binanceSpot, bot, chatId), 2000); // Détecte les opportunités d'arbitrage toutes les 2 secondes
+    // setInterval(() => updateUsdtBalance(binanceSpot), 30 * 1000); // Mettre à jour la balance USDT toutes les 30 secondes
+    // setInterval(() => checkArbitrageOpportunity(binanceSpot, bot, chatId), 2000); // Détecte les opportunités d'arbitrage toutes les 2 secondes
 }
 
 init();

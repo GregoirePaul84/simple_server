@@ -4,8 +4,8 @@ const sendDailyStatusUpdate = async (bot, chatId) => {
     try {
         // Récupération des données du portefeuille isolé
         const marginAccount = await getIsolatedMarginAccount(
-            process.env.BINANCE_API_KEY,
-            process.env.BINANCE_API_SECRET
+            process.env.BINANCE_MARGIN_API_KEY,
+            process.env.BINANCE_MARGIN_API_SECRET
         );
 
         const btcUsdcData = marginAccount.assets.find(asset => asset.symbol === 'BTCUSDC');

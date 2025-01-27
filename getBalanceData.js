@@ -3,8 +3,8 @@ const { getIsolatedMarginAccount } = require('./getIsolatedMarginAccount');
 const getBalanceData = async() => {
     // Récupération du solde pour le portefeuille de marge isolée
     const marginAccount = await getIsolatedMarginAccount(
-        process.env.BINANCE_API_KEY,
-        process.env.BINANCE_API_SECRET
+        process.env.BINANCE_MARGIN_API_KEY,
+        process.env.BINANCE_MARGIN_API_SECRET
     );
 
     // Balances pour BTC et USDC
