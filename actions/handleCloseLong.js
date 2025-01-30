@@ -23,8 +23,8 @@ const handleCloseLong = async (
 
     // Récupération des balances actuelles après clôture potentielle (via OCO)
     const marginAccount = await getIsolatedMarginAccount(
-        process.env.BINANCE_API_KEY,
-        process.env.BINANCE_API_SECRET
+        process.env.BINANCE_MARGIN_API_KEY,
+        process.env.BINANCE_MARGIN_API_SECRET
     );
 
     const btcUsdcData = marginAccount.assets.find(asset => asset.symbol === 'BTCUSDC');
