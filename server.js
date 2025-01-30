@@ -94,7 +94,7 @@ const startUserWebSocket = async () => {
     });
 
     // Renouveler le listenKey toutes les 50 minutes
-    setInterval(() => keepAliveMarginListenKey(listenKey), 50 * 60 * 1000);
+    setInterval(() => keepAliveMarginListenKey(listenKey, 'BTCUSDC'), 50 * 60 * 1000);
 };
 
 // Setter pour réinitialiser les profits mensuels

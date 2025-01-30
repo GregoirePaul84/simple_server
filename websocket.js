@@ -22,19 +22,28 @@ const getIsolatedMarginListenKey = async (symbol) => {
 };
 
 // Renouveler le listenKey
-const keepAliveMarginListenKey = async (listenKey) => {
+const keepAliveMarginListenKey = async (listenKey, symbol) => {
     try {
-        await axios.put(
-            `https://api.binance.com/sapi/v1/userDataStream`,
+        console.log(`Renouvellement de la listenKey : ${listenKey}`);
+
+        const response = await axios.put(
+            `https://api.binance.com/sapi/v1/userDataStream/isolated`, // Correction de l'URL
             null,
             {
                 headers: { 'X-MBX-APIKEY': process.env.BINANCE_MARGIN_API_KEY },
-                params: { listenKey },
+                params: { listenKey, symbol } // Paramètre ici et non dans l'URL
             }
         );
-        console.log('ListenKey renouvelé avec succès pour le portefeuille Margin.');
+
+        console.log('✅ ListenKey renouvelé avec succès pour le portefeuille Margin.', response.data);
     } catch (error) {
-        console.error('Erreur lors du renouvellement du listenKey Margin :', error.message);
+        console.error('❌ Erreur lors du renouvellement du listenKey Margin :', error.response?.data || error.message);
+
+        // Vérifie si l'erreur est due à une clé expirée et régénère un listenKey
+        if (error.response?.status === 400) {
+            console.error('🔄 ListenKey invalide ou expirée. Génération d\'une nouvelle clé...');
+            return await getIsolatedMarginListenKey('BTCUSDC'); // Fonction pour générer une nouvelle listenKey
+        }
     }
 };
 
