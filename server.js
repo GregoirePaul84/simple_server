@@ -204,16 +204,19 @@ app.post('/webhook', async (req, res) => {
             
             const longOrder = await takeLongPosition(binanceMargin, symbol, price, usdcBalance, bot, chatId);
 
-            initialPrice = longOrder.initialPrice;
+            // initialPrice = longOrder.initialPrice;
+
+            const btcBought = parseFloat(longOrder.order.executedQty); // Quantité exacte achetée
+            console.log('BTC achetés dans cet ordre :', btcBought);
 
             // Récupération de la balance BTC après l'achat
-            btcUsdcData = await getBalanceData();
-            const btcBalance = parseFloat(btcUsdcData.baseAsset.free);
+            // btcUsdcData = await getBalanceData();
+            // const btcBalance = parseFloat(btcUsdcData.baseAsset.free);
             
-            console.log('Solde réel BTC après achat :', btcBalance);
+            // console.log('Solde réel BTC après achat :', btcBalance);
 
             // Ordre OCO : gestion des SL et TP en limit
-            await placeOCOOrder(binanceMargin, symbol, 'BUY', price, btcBalance, bot, chatId);
+            await placeOCOOrder(binanceMargin, symbol, 'BUY', price, btcBought, bot, chatId);
         } 
         
         // ****** GESTION POSITION COURTE  ****** //
