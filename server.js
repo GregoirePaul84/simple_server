@@ -76,7 +76,7 @@ const startUserWebSocket = async () => {
                 const executedQuantity = parseFloat(message.q);
 
                 if (message.S === 'SELL') {
-                    handleCloseLong(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
+                    handleCloseLong(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId, binanceMargin);
                 } else if (message.S === 'BUY') {
                     handleCloseShort(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
                 }
@@ -205,12 +205,17 @@ app.post('/webhook', async (req, res) => {
             const longOrder = await takeLongPosition(binanceMargin, symbol, price, usdcBalance, bot, chatId);
 
             initialPrice = longOrder.initialPrice;
+            console.log(`BTC acheté sur ${initialPrice} BTC`);
 
             const btcBought = parseFloat(longOrder.order.executedQty); // Quantité exacte achetée
             console.log('BTC achetés dans cet ordre :', btcBought);
 
+            const feeRate = 0.001;
+            const btcAvailable = btcBought * (1 - feeRate); // Enlève les frais
+            console.log(`BTC réellement disponible après frais: ${btcAvailable}`);
+
             // Ordre OCO : gestion des SL et TP en limit
-            await placeOCOOrder(binanceMargin, symbol, 'BUY', price, btcBought, bot, chatId);
+            await placeOCOOrder(binanceMargin, symbol, 'BUY', price, btcAvailable, bot, chatId);
         } 
         
         // ****** GESTION POSITION COURTE  ****** //
@@ -225,12 +230,17 @@ app.post('/webhook', async (req, res) => {
             const shortOrder = await takeShortPosition(binanceMargin, symbol, price, usdcBalance, bot, chatId);
 
             initialPrice = shortOrder.initialPrice;
+            console.log(`BTC vendu sur ${initialPrice} BTC`);
 
             const btcSold = parseFloat(shortOrder.order.executedQty); // Quantité exacte achetée
             console.log('BTC shortés dans cet ordre :', btcSold);
+
+            const feeRate = 0.001;
+            const btcAvailable = btcSold * (1 - feeRate); // Enlève les frais
+            console.log(`BTC réellement disponible après frais: ${btcAvailable}`);
             
             // Ordre OCO : gestion des SL et TP en limit
-            await placeOCOOrder(binanceMargin, symbol, 'SELL', price, btcSold, bot, chatId);
+            await placeOCOOrder(binanceMargin, symbol, 'SELL', price, btcAvailable, bot, chatId);
         } 
 
         res.status(200).send('Ordre effectué avec succès.')
