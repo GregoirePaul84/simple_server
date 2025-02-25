@@ -204,16 +204,10 @@ app.post('/webhook', async (req, res) => {
             
             const longOrder = await takeLongPosition(binanceMargin, symbol, price, usdcBalance, bot, chatId);
 
-            // initialPrice = longOrder.initialPrice;
+            initialPrice = longOrder.initialPrice;
 
             const btcBought = parseFloat(longOrder.order.executedQty); // Quantité exacte achetée
             console.log('BTC achetés dans cet ordre :', btcBought);
-
-            // Récupération de la balance BTC après l'achat
-            // btcUsdcData = await getBalanceData();
-            // const btcBalance = parseFloat(btcUsdcData.baseAsset.free);
-            
-            // console.log('Solde réel BTC après achat :', btcBalance);
 
             // Ordre OCO : gestion des SL et TP en limit
             await placeOCOOrder(binanceMargin, symbol, 'BUY', price, btcBought, bot, chatId);
@@ -229,9 +223,14 @@ app.post('/webhook', async (req, res) => {
             console.log('balance USDC avant position courte =>', usdcBalance);
 
             const shortOrder = await takeShortPosition(binanceMargin, symbol, price, usdcBalance, bot, chatId);
+
+            initialPrice = shortOrder.initialPrice;
+
+            const btcSold = parseFloat(shortOrder.order.executedQty); // Quantité exacte achetée
+            console.log('BTC shortés dans cet ordre :', btcSold);
             
             // Ordre OCO : gestion des SL et TP en limit
-            await placeOCOOrder(binanceMargin, symbol, 'SELL', price, parseFloat(shortOrder.order.executedQty), bot, chatId);
+            await placeOCOOrder(binanceMargin, symbol, 'SELL', price, btcSold, bot, chatId);
         } 
 
         res.status(200).send('Ordre effectué avec succès.')
