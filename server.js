@@ -12,7 +12,6 @@ const { placeOCOOrder } = require('./actions/placeOcoOrder');
 const { scheduleMonthlyReport, sendMonthlyReport } = require('./monthlyReport'); // Import du fichier pour le rapport mensuel
 const { handleCloseLong } = require('./actions/handleCloseLong');
 const { handleCloseShort } = require('./actions/handleCloseShort');
-const { sendDailyStatusUpdate } = require('./sendDailyStatusUpdate');
 const schedule = require('node-schedule'); // Librairie pour le planificateur
 const WebSocket = require('ws');
 const { getIsolatedMarginListenKey, keepAliveMarginListenKey } = require('./websocket');
@@ -51,7 +50,7 @@ const binanceMargin = Binance({
 let initialPrice = null; // Prix initial de la position
 let totalProfitMonthly = 0; // Total du mois en cours
 let totalProfitCumulative = 0; // Total depuis le début
-const initialCapital = 50; // Capital initial en USDC
+const initialCapital = 2000; // Capital initial en USDC
 
 // Connecter le WebSocket utilisateur pour détecter le passage des ordres OCO
 const startUserWebSocket = async () => {
@@ -278,7 +277,6 @@ app.listen(port, () => {
 
 const init = () => {
     startUserWebSocket(); // Données de Binance
-    scheduleDailyReport(); // Rapport journalier à minuit
     scheduleMonthlyReport(bot, chatId, () => totalProfitCumulative, () => totalProfitMonthly, resetMonthlyProfit); // Rapport Telegram mensuel
     // setInterval(() => updateUsdtBalance(binanceSpot), 30 * 1000); // Mettre à jour la balance USDT toutes les 30 secondes
     // setInterval(() => checkArbitrageOpportunity(binanceSpot, bot, chatId), 2000); // Détecte les opportunités d'arbitrage toutes les 2 secondes
