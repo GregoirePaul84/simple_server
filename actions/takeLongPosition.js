@@ -1,7 +1,11 @@
+const { getDecimalPlaces } = require("../getDecimalPlaces");
+const { getSlAndTpLevels } = require("../getSlAndTpLevels");
+
 // Fonction pour gérer un achat (position longue)
 const takeLongPosition = async(
     binance, 
     symbol, 
+    type,
     price, 
     usdcBalance, 
     bot,
@@ -14,12 +18,24 @@ const takeLongPosition = async(
         throw new Error('Solde USDC insuffisant.');
     }
     
-    const stepSize = 0.00001; // StepSize pour BTCUSDC
-    const minQty = 0.00001; // Quantité minimale
+    // Définir StepSize et MinQty selon la paire
+    let stepSize, minQty;
+
+    if (symbol === 'BTCUSDC') {
+        stepSize = 0.00001;
+        minQty = 0.00001;
+    } else if (symbol === 'DOGEUSDC') {
+        stepSize = 0.1;
+        minQty = 1;
+    } else {
+        throw new Error(`StepSize et MinQty non définis pour le symbole : ${symbol}`);
+    }
+
+    const decimalPlaces = getDecimalPlaces(stepSize);
 
     // Calcul de la quantité ajustée
     let quantityToBuy = Math.floor((usdcBalance / price) / stepSize) * stepSize;
-    quantityToBuy = parseFloat(quantityToBuy.toFixed(5));
+    quantityToBuy = parseFloat(quantityToBuy.toFixed(decimalPlaces));
 
     if (quantityToBuy < minQty) {
         throw new Error('La quantité calculée est inférieure au minimum requis.');
@@ -44,9 +60,11 @@ const takeLongPosition = async(
 
     console.log('Prise de position longue.', order);
     
+    const slAndTpLevels = getSlAndTpLevels(type);
+
     // Calcul des niveaux de stop-loss et de take-profit
-    const stopLoss = price * (1 - 5.0 / 100); 
-    const takeProfit = price * (1 + 8.7 / 100);
+    const stopLoss = price * (1 - slAndTpLevels.stop_loss / 100); 
+    const takeProfit = price * (1 + slAndTpLevels.take_profit / 100);
     
     const potentialGain = (takeProfit - price) * quantityToBuy;
     const potentialLoss = (price - stopLoss) * quantityToBuy;
@@ -60,7 +78,7 @@ const takeLongPosition = async(
         - Symbole : ${symbol}
         - Prix d'achat: ${price} USDC
         - Capital investi : ${usdcBalance.toFixed(2)} USDC
-        - Quantité achetée : ${quantityToBuy} BTC
+        - Quantité achetée : ${quantityToBuy} ${symbol === 'BTCUSDC' ? 'BTC' : 'DOGE'}
         - Gain potentiel : +${potentialGain.toFixed(2)} USDC
         - Perte potentielle : -${potentialLoss.toFixed(2)} USDC
         `

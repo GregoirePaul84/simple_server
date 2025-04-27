@@ -22,7 +22,7 @@ const getGainMessage = () => {
         "Reste concentré… les Bahamas, c’est pas pour tout de suite. 🌴💼",
         "Les calculatrices chauffent : gain validé ! 🧮🔥",
         "Mieux qu’une promo Black Friday : +1 trade gagnant dans la poche ! 🛍️💰",
-        "Bientôt, on appellera ça 'la méthode [Ton Prénom]' ! 😎🎯",
+        "Bientôt, on appellera ça 'la méthode Grégoire' ! 😎🎯",
         "Le portefeuille sourit, et toi aussi. 😄📈",
     ];
     return messages[Math.floor(Math.random() * messages.length)];

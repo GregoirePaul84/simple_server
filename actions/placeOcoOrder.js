@@ -1,24 +1,22 @@
-const placeOCOOrder = async (binance, symbol, side, price, btcBalance, bot, chatId) => {
+const { getSlAndTpLevels } = require("../getSlAndTpLevels");
+
+const placeOCOOrder = async (binance, symbol, type, side, price, assetsAvailable, bot, chatId) => {
     try {
 
-        if (btcBalance <= 0) {
+        if (assetsAvailable <= 0) {
             throw new Error('Quantité insuffisante pour passer un ordre OCO.');
         }
         
-        // Calcul du Take Profit et Stop Loss
-        const stopLossPercentLong = 5.38; // Stop Loss pour LONG
-        const takeProfitPercentLong = 8.59; // Take Profit pour LONG
-        const stopLossPercentShort = 5.11; // Stop Loss pour SHORT
-        const takeProfitPercentShort = 8.94; // Take Profit pour SHORT
+        const slAndTpLevels = getSlAndTpLevels(type);
 
         // Calcul des prix
         const takeProfitPrice = side === 'BUY' 
-            ? price * (1 + takeProfitPercentLong / 100) // +8.7% pour LONG
-            : price * (1 - takeProfitPercentShort / 100); // -8.9% pour SHORT
+            ? price * (1 + slAndTpLevels.take_profit / 100) 
+            : price * (1 - slAndTpLevels.take_profit / 100); 
 
         const stopLossPrice = side === 'BUY' 
-            ? price * (1 - stopLossPercentLong / 100) // -5.3% pour LONG
-            : price * (1 + stopLossPercentShort / 100); // +5.4% pour SHORT
+            ? price * (1 - slAndTpLevels.stop_loss / 100) 
+            : price * (1 + slAndTpLevels.stop_loss / 100); 
 
         const stopLimitPrice = side === 'BUY' 
             ? stopLossPrice * 0.99 // Ajustement limite pour LONG
@@ -28,9 +26,21 @@ const placeOCOOrder = async (binance, symbol, side, price, btcBalance, bot, chat
         console.log('Stop Loss Price :', stopLossPrice.toFixed(2));
         console.log('Stop Limit Price :', stopLimitPrice.toFixed(2));
 
-        const stepSize = 0.00001; // Ajustement selon les règles de la paire
-        const adjustedQuantity = Math.floor(btcBalance / stepSize) * stepSize; // Ajuster au stepSize
-        const finalQuantity = adjustedQuantity.toFixed(5); // Garantir 5 décimales
+        let stepSize;
+
+        if (symbol === 'BTCUSDC') {
+            stepSize = 0.00001;
+        } else if (symbol === 'DOGEUSDC') {
+            stepSize = 0.1;
+        } else {
+            throw new Error(`StepSize non défini pour le symbole : ${symbol}`);
+        }
+        
+        const adjustedQuantity = Math.floor(assetsAvailable / stepSize) * stepSize; // Ajuster au stepSize
+
+        const decimalPlaces = getDecimalPlaces(stepSize);
+
+        const finalQuantity = adjustedQuantity.toFixed(decimalPlaces);
 
         console.log('Quantité finale ajustée =>', finalQuantity);
 

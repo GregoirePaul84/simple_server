@@ -38,14 +38,6 @@ const binanceMargin = Binance({
     verbose: true, // Affiche les logs pour aider au débogage
 });
 
-// // Configuration de Binance API pour l'arbitrage
-// const binanceSpot = Binance({
-//     apiKey: process.env.BINANCE_SPOT_API_KEY,
-//     apiSecret: process.env.BINANCE_SPOT_API_SECRET,
-//     reconnect: true, // Permet de se reconnecter automatiquement
-//     verbose: true, // Affiche les logs pour aider au débogage
-// });
-
 // Variables de base
 let initialPrice = null; // Prix initial de la position
 let totalProfitMonthly = 0; // Total du mois en cours
@@ -54,46 +46,47 @@ const initialCapital = 2000; // Capital initial en USDC
 
 // Connecter le WebSocket utilisateur pour détecter le passage des ordres OCO
 const startUserWebSocket = async () => {
-    const listenKey = await getIsolatedMarginListenKey('BTCUSDC'); 
-    const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${listenKey}`);
+    const symbols = ['BTCUSDC', 'DOGEUSDC']; // Gérer plusieurs paires
+    for (const symbol of symbols) {
+        const listenKey = await getIsolatedMarginListenKey(symbol);
+        const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${listenKey}`);
 
-    ws.on('open', () => {
-        console.log('WebSocket connecté.');
-    });
+        ws.on('open', () => {
+            console.log(`WebSocket connecté pour ${symbol}.`);
+        });
 
-    ws.on('message', (data) => {
-        const message = JSON.parse(data);
-        console.log('Message WebSocket reçu :', message);
+        ws.on('message', (data) => {
+            const message = JSON.parse(data);
+            console.log(`Message WebSocket reçu pour ${symbol}:`, message);
 
-        if (message.e === 'executionReport' && message.X === 'FILLED') {
-            if (message.o === 'STOP_LOSS_LIMIT' || message.o === 'LIMIT_MAKER') {
-                console.log(`Ordre OCO exécuté : ${message.S} pour ${message.s}`);
-                console.log(`Prix exécuté : ${message.p}`);
-                console.log(`Quantité exécutée : ${message.q}`);
+            if (message.e === 'executionReport' && message.X === 'FILLED') {
+                if (message.o === 'STOP_LOSS_LIMIT' || message.o === 'LIMIT_MAKER') {
+                    console.log(`Ordre OCO exécuté pour ${message.s}`);
 
-                const executedPrice = parseFloat(message.p);
-                const executedQuantity = parseFloat(message.q);
+                    const executedPrice = parseFloat(message.p);
+                    const executedQuantity = parseFloat(message.q);
 
-                if (message.S === 'SELL') {
-                    handleCloseLong(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId, binanceMargin);
-                } else if (message.S === 'BUY') {
-                    handleCloseShort(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
+                    if (message.S === 'SELL') {
+                        handleCloseLong(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId, binanceMargin);
+                    } else if (message.S === 'BUY') {
+                        handleCloseShort(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
+                    }
                 }
             }
-        }
-    });
+        });
 
-    ws.on('error', (err) => {
-        console.error('Erreur WebSocket :', err);
-    });
+        ws.on('error', (err) => {
+            console.error(`Erreur WebSocket pour ${symbol}:`, err);
+        });
 
-    ws.on('close', () => {
-        console.log('WebSocket fermé. Reconnexion...');
-        startUserWebSocket(); // Reconnecter automatiquement
-    });
+        ws.on('close', () => {
+            console.log(`WebSocket pour ${symbol} fermé. Reconnexion...`);
+            startUserWebSocket(); // relance tout
+        });
 
-    // Renouveler le listenKey toutes les 50 minutes
-    setInterval(() => keepAliveMarginListenKey(listenKey, 'BTCUSDC'), 50 * 60 * 1000);
+        // Renouveler le listenKey toutes les 50 minutes
+        setInterval(() => keepAliveMarginListenKey(listenKey, symbol), 50 * 60 * 1000);
+    }
 };
 
 // Setter pour réinitialiser les profits mensuels
@@ -150,7 +143,7 @@ app.get('/balance', async (_, res) => {
             process.env.BINANCE_MARGIN_API_SECRET
         );
 
-        // Recherche de la paire BTCUSDT
+        // Recherche de la paire BTCUSDC
         const btcUsdcData = data.assets.find(asset => asset.symbol === 'BTCUSDC');
 
         if (!btcUsdcData) {
@@ -175,7 +168,7 @@ app.get('/balance', async (_, res) => {
 
 // Endpoint Webhook pour recevoir les alertes de TradingView
 app.post('/webhook', async (req, res) => {
-    const { action, symbol, key } = req.body;
+    const { action, type, symbol, key } = req.body;
     
     // Vérification de la clé secrète
     if (key !== process.env.WEBHOOK_SECRET) {
@@ -186,35 +179,35 @@ app.post('/webhook', async (req, res) => {
     try {
         console.log('début du webhook');
         
-        // Prix actuel BTC / USDC
+        // Prix actuel BTC / USDC ou DOGE / USDC
         const prices = await binanceMargin.prices();
         const price = parseFloat(prices[symbol]);
 
-        console.log(`Prix actuel du BTC => ${price}USDC`);
+        console.log(`Prix actuel de l'actif pour ${symbol} => ${price} USDC`);
         
         // ****** GESTION POSITION LONGUE  ****** //
         // ACHAT LONG
         if (action === 'LONG') {           
             
             // Récupération de la balance USDC avant l'achat
-            let btcUsdcData = await getBalanceData();
-            const usdcBalance = parseFloat(btcUsdcData.quoteAsset.free);
-            console.log('balance USDC avant position longue =>', usdcBalance);
+            let balanceData = await getBalanceData(symbol);
+            const usdcBalance = parseFloat(balanceData.quoteAsset.free);
+            console.log(`balance USDC avant position longue pour ${symbol} =>`, usdcBalance);
             
-            const longOrder = await takeLongPosition(binanceMargin, symbol, price, usdcBalance, bot, chatId);
+            const longOrder = await takeLongPosition(binanceMargin, symbol, type, price, usdcBalance, bot, chatId);
 
             initialPrice = longOrder.initialPrice;
-            console.log(`BTC acheté sur ${initialPrice} BTC`);
+            console.log(`Actifs achetés sur ${initialPrice} pour ${symbol}`);
 
-            const btcBought = parseFloat(longOrder.order.executedQty); // Quantité exacte achetée
-            console.log('BTC achetés dans cet ordre :', btcBought);
+            const assetsBought = parseFloat(longOrder.order.executedQty); // Quantité exacte achetée
+            console.log('Actifs achetés dans cet ordre :', assetsBought);
 
             const feeRate = 0.001;
-            const btcAvailable = btcBought * (1 - feeRate); // Enlève les frais
-            console.log(`BTC réellement disponible après frais: ${btcAvailable}`);
+            const assetsAvailable = assetsBought * (1 - feeRate); // Enlève les frais
+            console.log(`Actifs réellement disponibles après frais: ${assetsAvailable}`);
 
             // Ordre OCO : gestion des SL et TP en limit
-            await placeOCOOrder(binanceMargin, symbol, 'BUY', price, btcAvailable, bot, chatId);
+            await placeOCOOrder(binanceMargin, symbol, type, 'BUY', price, assetsAvailable, bot, chatId);
         } 
         
         // ****** GESTION POSITION COURTE  ****** //
@@ -222,24 +215,24 @@ app.post('/webhook', async (req, res) => {
         else if (action === 'SHORT') {
             
             // Récupération de la balance USDC avant la vente
-            let btcUsdcData = await getBalanceData();
-            const usdcBalance = parseFloat(btcUsdcData.quoteAsset.free);
+            let balanceData = await getBalanceData();
+            const usdcBalance = parseFloat(balanceData.quoteAsset.free);
             console.log('balance USDC avant position courte =>', usdcBalance);
 
-            const shortOrder = await takeShortPosition(binanceMargin, symbol, price, usdcBalance, bot, chatId);
+            const shortOrder = await takeShortPosition(binanceMargin, symbol, type, price, usdcBalance, bot, chatId);
 
             initialPrice = shortOrder.initialPrice;
-            console.log(`BTC vendu sur ${initialPrice} BTC`);
+            console.log(`actif shorté sur ${initialPrice} ${symbol === 'BTCUSDC' ? 'BTC' : 'USDC'}`);
 
-            const btcSold = parseFloat(shortOrder.order.executedQty); // Quantité exacte achetée
-            console.log('BTC shortés dans cet ordre :', btcSold);
+            const assetsSold = parseFloat(shortOrder.order.executedQty); // Quantité exacte achetée
+            console.log('Nombre shorté dans cet ordre :', assetsSold);
 
             const feeRate = 0.001;
-            const btcAvailable = btcSold * (1 - feeRate); // Enlève les frais
-            console.log(`BTC réellement disponible après frais: ${btcAvailable}`);
+            const assetsAvailable = assetsSold * (1 - feeRate); // Enlève les frais
+            console.log(`Actifs réellement disponible après frais: ${assetsAvailable}`);
             
             // Ordre OCO : gestion des SL et TP en limit
-            await placeOCOOrder(binanceMargin, symbol, 'SELL', price, btcAvailable, bot, chatId);
+            await placeOCOOrder(binanceMargin, symbol, type, 'SELL', price, assetsAvailable, bot, chatId);
         } 
 
         res.status(200).send('Ordre effectué avec succès.')
@@ -262,13 +255,6 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
-const scheduleDailyReport = async () => {
-    schedule.scheduleJob('0 0 * * *', async () => {
-        console.log('Envoi du rapport quotidien...');
-        await sendDailyStatusUpdate(bot, chatId);
-    });
-}
-
 // Lancer le serveur
 app.listen(port, () => {
     console.log(`Serveur en cours d'exécution sur ${externalURL}`);
@@ -278,8 +264,6 @@ app.listen(port, () => {
 const init = () => {
     startUserWebSocket(); // Données de Binance
     scheduleMonthlyReport(bot, chatId, () => totalProfitCumulative, () => totalProfitMonthly, resetMonthlyProfit); // Rapport Telegram mensuel
-    // setInterval(() => updateUsdtBalance(binanceSpot), 30 * 1000); // Mettre à jour la balance USDT toutes les 30 secondes
-    // setInterval(() => checkArbitrageOpportunity(binanceSpot, bot, chatId), 2000); // Détecte les opportunités d'arbitrage toutes les 2 secondes
 }
 
 init();
