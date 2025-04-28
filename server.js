@@ -15,7 +15,6 @@ const { handleCloseShort } = require('./actions/handleCloseShort');
 const schedule = require('node-schedule'); // Librairie pour le planificateur
 const WebSocket = require('ws');
 const { getIsolatedMarginListenKey, keepAliveMarginListenKey } = require('./websocket');
-// const { checkArbitrageOpportunity, updateUsdtBalance } = require('./actions/arbitrage');
 
 // Configuration de Telegram
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
