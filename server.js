@@ -192,7 +192,7 @@ app.post('/webhook', async (req, res) => {
             let balanceData = await getBalanceData(symbol);
             const usdcBalance = parseFloat(balanceData.quoteAsset.free);
             console.log(`balance USDC avant position longue pour ${symbol} =>`, usdcBalance);
-            
+
             const longOrder = await takeLongPosition(binanceMargin, symbol, type, price, usdcBalance, bot, chatId);
 
             initialPrice = longOrder.initialPrice;
@@ -214,7 +214,7 @@ app.post('/webhook', async (req, res) => {
         else if (action === 'SHORT') {
             
             // Récupération de la balance USDC avant la vente
-            let balanceData = await getBalanceData();
+            let balanceData = await getBalanceData(symbol);
             const usdcBalance = parseFloat(balanceData.quoteAsset.free);
             console.log('balance USDC avant position courte =>', usdcBalance);
 
