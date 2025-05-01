@@ -33,11 +33,11 @@ const takeLongPosition = async(
 
     const decimalPlaces = getDecimalPlaces(stepSize);
 
-    const feeRate = 0.00075; // 0.075%
-    const marginForFees = 1 - feeRate;
+    const feeRate = 0.00075;
+    const slippage = 0.005;
+    const margin = 1 - feeRate - slippage;
 
-    // Calcul de la quantité ajustée
-    let rawQuantity = (usdcBalance / price) * marginForFees;
+    const rawQuantity = (usdcBalance / price) * margin;
     let quantityToBuy = Math.floor(rawQuantity / stepSize) * stepSize;
     quantityToBuy = parseFloat(quantityToBuy.toFixed(decimalPlaces));
 

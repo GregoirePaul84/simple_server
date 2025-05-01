@@ -1,3 +1,4 @@
+const { getDecimalPlaces } = require("../getDecimalPlaces");
 const { getSlAndTpLevels } = require("../getSlAndTpLevels");
 
 const placeOCOOrder = async (binance, symbol, type, side, price, assetsAvailable, bot, chatId) => {
