@@ -23,9 +23,9 @@ const takeLongPosition = async(
     console.log(`Balance disponible => ${usdcBalance} USDC`);
     
     const exchangeInfo = await binance.exchangeInfo();
-    const dogeUsdcInfo = exchangeInfo.symbols.find(s => s.symbol === symbol);
+    const symbolInfo = exchangeInfo.symbols.find(s => s.symbol === symbol);
 
-    const lotSizeFilter = dogeUsdcInfo.filters.find(f => f.filterType === 'LOT_SIZE');
+    const lotSizeFilter = symbolInfo.filters.find(f => f.filterType === 'LOT_SIZE');
     const stepSize = parseFloat(lotSizeFilter.stepSize);
     const minQty = parseFloat(lotSizeFilter.minQty);
     const decimalPlaces = getDecimalPlaces(stepSize);
@@ -55,7 +55,7 @@ const takeLongPosition = async(
     console.log(`Quantité ajustée : ${quantityToBuy} à ${price} USDC`);    
 
     // Étape 5 : vérification valeur minimale (minNotional)
-    const notionalFilter = dogeUsdcInfo.filters.find(f => f.filterType === 'NOTIONAL');
+    const notionalFilter = symbolInfo.filters.find(f => f.filterType === 'NOTIONAL');
     const minNotional = parseFloat(notionalFilter.minNotional);
 
     const totalOrderValue = quantityToBuy * price;

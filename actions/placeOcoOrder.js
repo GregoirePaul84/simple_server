@@ -29,32 +29,38 @@ const placeOCOOrder = async (binance, symbol, type, side, price, assetsAvailable
         console.log('Stop Loss Price :', stopLossPrice.toFixed(2));
         console.log('Stop Limit Price :', stopLimitPrice.toFixed(2));
 
-        let stepSize;
+        // Récupération des données pour le symbole
+        const exchangeInfo = await binance.exchangeInfo();
+        const symbolInfo = exchangeInfo.symbols.find(s => s.symbol === symbol);
 
-        if (symbol === 'BTCUSDC') {
-            stepSize = 0.00001;
-        } else if (symbol === 'DOGEUSDC') {
-            stepSize = 0.1;
-        } else {
-            throw new Error(`StepSize non défini pour le symbole : ${symbol}`);
-        }
-        
-        const adjustedQuantity = Math.floor(assetsAvailable / stepSize) * stepSize; // Ajuster au stepSize
-
+        const lotSizeFilter = symbolInfo.filters.find(f => f.filterType === 'LOT_SIZE');
+        const stepSize = parseFloat(lotSizeFilter.stepSize);
+        const minQty = parseFloat(lotSizeFilter.minQty);
         const decimalPlaces = getDecimalPlaces(stepSize);
+
+        let adjustedQuantity = Math.floor(assetsAvailable / stepSize) * stepSize;
+        adjustedQuantity = parseFloat(adjustedQuantity.toFixed(decimalPlaces));
+
+        if (adjustedQuantity < minQty) {
+            throw new Error(`Quantité trop faible pour ${symbol}. Minimum requis : ${minQty}`);
+        }
 
         const finalQuantity = adjustedQuantity.toFixed(decimalPlaces);
 
         console.log('Quantité finale ajustée =>', finalQuantity);
+
+        const priceFilter = symbolInfo.filters.find(f => f.filterType === 'PRICE_FILTER');
+        const tickSize = parseFloat(priceFilter.tickSize);
+        const priceDecimalPlaces = getDecimalPlaces(tickSize);
 
         // Passer l'ordre OCO
         const ocoOrder = await binance.marginOrderOco({
             symbol,
             side: side === 'BUY' ? 'SELL' : 'BUY', // Si on a acheté, on vend pour clôturer
             quantity: finalQuantity,        // Quantité arrondie
-            price: takeProfitPrice.toFixed(2),    // Prix du Take Profit
-            stopPrice: stopLossPrice.toFixed(2),  // Prix du Stop Loss
-            stopLimitPrice: stopLimitPrice.toFixed(2), // Prix limite du Stop Loss
+            price: takeProfitPrice.toFixed(priceDecimalPlaces),    // Prix du Take Profit
+            stopPrice: stopLossPrice.toFixed(priceDecimalPlaces),  // Prix du Stop Loss
+            stopLimitPrice: stopLimitPrice.toFixed(priceDecimalPlaces), // Prix limite du Stop Loss
             stopLimitTimeInForce: 'GTC',          // Good 'Til Cancelled
             isIsolated: true,                     // Utilisation du portefeuille isolé
         });
@@ -64,9 +70,9 @@ const placeOCOOrder = async (binance, symbol, type, side, price, assetsAvailable
         bot.sendMessage(
             chatId,
             `✅ Ordre OCO ajusté :
-            - Take profit : ${takeProfitPrice.toFixed(2)} USDC
-            - Stop loss : ${stopLossPrice.toFixed(2)} USDC
-            - Stop limite : ${stopLimitPrice.toFixed(2)} USDC
+            - Take profit : ${takeProfitPrice.toFixed(priceDecimalPlaces)} USDC
+            - Stop loss : ${stopLossPrice.toFixed(priceDecimalPlaces)} USDC
+            - Stop limite : ${stopLimitPrice.toFixed(priceDecimalPlaces)} USDC
             `
         );
     } catch (error) {
