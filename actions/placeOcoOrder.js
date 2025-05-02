@@ -4,6 +4,8 @@ const { getSlAndTpLevels } = require("../getSlAndTpLevels");
 const placeOCOOrder = async (binance, symbol, type, side, price, assetsAvailable, bot, chatId) => {
     try {
 
+        console.log(`ordre OCO débuté pour ${symbol}`);
+        
         if (assetsAvailable <= 0) {
             throw new Error('Quantité insuffisante pour passer un ordre OCO.');
         }

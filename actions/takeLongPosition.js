@@ -12,46 +12,68 @@ const takeLongPosition = async(
     chatId
 ) => {
     
+    console.log(`Achat commencé pour ${symbol}`);
+    
     // Vérification du solde USDC pour un achat
     if (usdcBalance <= 0) {
         console.error('Solde insuffisant en USDC pour acheter.');
         throw new Error('Solde USDC insuffisant.');
     }
     
-    // Définir StepSize et MinQty selon la paire
-    let stepSize, minQty;
+    console.log(`Balance disponible => ${usdcBalance} USDC`);
+    
+    const exchangeInfo = await binance.exchangeInfo();
+    const dogeUsdcInfo = exchangeInfo.symbols.find(s => s.symbol === symbol);
 
-    if (symbol === 'BTCUSDC') {
-        stepSize = 0.00001;
-        minQty = 0.00001;
-    } else if (symbol === 'DOGEUSDC') {
-        stepSize = 0.1;
-        minQty = 1;
-    } else {
-        throw new Error(`StepSize et MinQty non définis pour le symbole : ${symbol}`);
-    }
-
+    const lotSizeFilter = dogeUsdcInfo.filters.find(f => f.filterType === 'LOT_SIZE');
+    const stepSize = parseFloat(lotSizeFilter.stepSize);
+    const minQty = parseFloat(lotSizeFilter.minQty);
     const decimalPlaces = getDecimalPlaces(stepSize);
 
-    const feeRate = 0.00075;
-    const slippage = 0.005;
-    const margin = 1 - feeRate - slippage;
+    // Étape 1 : quantité brute
+    const grossQuantity = usdcBalance / price;
 
-    const rawQuantity = (usdcBalance / price) * margin;
-    let quantityToBuy = Math.floor(rawQuantity / stepSize) * stepSize;
+    // Étape 2 : réduction marge
+    const slippage = 0.01;
+    const feeRate = 0.00075;
+    const margin = 1 - feeRate - slippage;
+    let quantityToBuy = grossQuantity * margin;
+
+    // Étape 3 : arrondi au stepSize
+    quantityToBuy = Math.floor(quantityToBuy / stepSize) * stepSize;
     quantityToBuy = parseFloat(quantityToBuy.toFixed(decimalPlaces));
 
-    if (quantityToBuy < minQty) {
-        throw new Error('La quantité calculée est inférieure au minimum requis.');
-    }
+    // Étape 3 : arrondi au stepSize
+    quantityToBuy = Math.floor(quantityToBuy / stepSize) * stepSize;
+    quantityToBuy = parseFloat(quantityToBuy.toFixed(decimalPlaces));
 
-    console.log(`Quantité ajustée : ${quantityToBuy}`);
+    // Étape 4 : vérification minQty
+    if (quantityToBuy < minQty) {
+        throw new Error(`Quantité trop faible. Minimum requis pour ${symbol} : ${minQty}`);
+    }
+    
+    console.log(`Quantité ajustée : ${quantityToBuy} à ${price} USDC`);    
+
+    // Étape 5 : vérification valeur minimale (minNotional)
+    const notionalFilter = dogeUsdcInfo.filters.find(f => f.filterType === 'NOTIONAL');
+    const minNotional = parseFloat(notionalFilter.minNotional);
 
     const totalOrderValue = quantityToBuy * price;
 
-    if (totalOrderValue < 5) {
-        throw new Error('Le montant total de l\'ordre est inférieur au minimum requis de 5 USDC.');
+    console.log(`coût total => ${totalOrderValue} USDC`);
+    
+    if (totalOrderValue < minNotional) {
+        throw new Error(`Valeur de l'ordre trop faible. Minimum requis : ${minNotional} USDC.`);
     }
+
+    console.log({
+        usdcBalance,
+        quantityToBuy,
+        stepSize,
+        minQty,
+        totalOrderValue: quantityToBuy * price,
+        minNotional
+      });      
     
     // ACHAT
     const order = await binance.marginOrder({

@@ -44,47 +44,51 @@ let totalProfitCumulative = 0; // Total depuis le début
 const initialCapital = 2000; // Capital initial en USDC
 
 // Connecter le WebSocket utilisateur pour détecter le passage des ordres OCO
-const startUserWebSocket = async () => {
-    const symbols = ['BTCUSDC', 'DOGEUSDC']; // Gérer plusieurs paires
-    for (const symbol of symbols) {
-        const listenKey = await getIsolatedMarginListenKey(symbol);
-        const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${listenKey}`);
+const createWebSocketForSymbol = async (symbol) => {
+    const listenKey = await getIsolatedMarginListenKey(symbol);
+    const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${listenKey}`);
 
-        ws.on('open', () => {
-            console.log(`WebSocket connecté pour ${symbol}.`);
-        });
+    ws.on('open', () => {
+        console.log(`WebSocket connecté pour ${symbol}.`);
+    });
 
-        ws.on('message', (data) => {
-            const message = JSON.parse(data);
-            console.log(`Message WebSocket reçu pour ${symbol}:`, message);
+    ws.on('message', (data) => {
+        const message = JSON.parse(data);
+        console.log(`Message WebSocket reçu pour ${symbol}:`, message);
 
-            if (message.e === 'executionReport' && message.X === 'FILLED') {
-                if (message.o === 'STOP_LOSS_LIMIT' || message.o === 'LIMIT_MAKER') {
-                    console.log(`Ordre OCO exécuté pour ${message.s}`);
+        if (message.e === 'executionReport' && message.X === 'FILLED') {
+            if (message.o === 'STOP_LOSS_LIMIT' || message.o === 'LIMIT_MAKER') {
+                console.log(`Ordre OCO exécuté pour ${message.s}`);
 
-                    const executedPrice = parseFloat(message.p);
-                    const executedQuantity = parseFloat(message.q);
+                const executedPrice = parseFloat(message.p);
+                const executedQuantity = parseFloat(message.q);
 
-                    if (message.S === 'SELL') {
-                        handleCloseLong(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId, binanceMargin);
-                    } else if (message.S === 'BUY') {
-                        handleCloseShort(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
-                    }
+                if (message.S === 'SELL') {
+                    handleCloseLong(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId, binanceMargin);
+                } else if (message.S === 'BUY') {
+                    handleCloseShort(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
                 }
             }
-        });
+        }
+    });
 
-        ws.on('error', (err) => {
-            console.error(`Erreur WebSocket pour ${symbol}:`, err);
-        });
+    ws.on('error', (err) => {
+        console.error(`Erreur WebSocket pour ${symbol}:`, err);
+    });
 
-        ws.on('close', () => {
-            console.log(`WebSocket pour ${symbol} fermé. Reconnexion...`);
-            startUserWebSocket(); // relance tout
-        });
+    ws.on('close', () => {
+        console.log(`WebSocket pour ${symbol} fermé. Reconnexion dans 5s...`);
+        setTimeout(() => createWebSocketForSymbol(symbol), 5000);
+    });
 
-        // Renouveler le listenKey toutes les 50 minutes
-        setInterval(() => keepAliveMarginListenKey(listenKey, symbol), 50 * 60 * 1000);
+    // Keep alive
+    setInterval(() => keepAliveMarginListenKey(listenKey, symbol), 50 * 60 * 1000);
+};
+
+const startUserWebSocket = async () => {
+    const symbols = ['BTCUSDC', 'DOGEUSDC'];
+    for (const symbol of symbols) {
+        await createWebSocketForSymbol(symbol);
     }
 };
 
@@ -250,7 +254,8 @@ app.post('/webhook', async (req, res) => {
         }
         
         bot.sendMessage(chatId, `❌ Erreur : ${error.message}`);
-        res.status(500).send('Erreur lors de l\'exécution de l\'ordre.');
+        res.status(500).json({ message: 'Erreur lors de l\'exécution de l\'ordre.', error: error.message });
+        return { order: null, initialPrice: null };
     }
 });
 
