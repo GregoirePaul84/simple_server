@@ -3,6 +3,7 @@ const { getIsolatedMarginAccount } = require('../getIsolatedMarginAccount');
 
 // Fonction pour gérer une vente
 const handleCloseShort = async (
+    symbol,
     initialPrice,
     executedPrice,
     executedQuantity,
@@ -27,14 +28,14 @@ const handleCloseShort = async (
         process.env.BINANCE_MARGIN_API_SECRET
     );
 
-    const btcUsdcData = marginAccount.assets.find(asset => asset.symbol === 'BTCUSDC');
+    const assetsData = marginAccount.assets.find(asset => asset.symbol === `${symbol}`);
 
-    if (!btcUsdcData) {
-        throw new Error('Impossible de récupérer les données pour la paire BTCUSDC.');
+    if (!assetsData) {
+        throw new Error(`Impossible de récupérer les données pour la paire ${symbol}.`);
     }
 
-    const newUsdcBalance = parseFloat(btcUsdcData.quoteAsset.free);
-    const newBtcBalance = parseFloat(btcUsdcData.baseAsset.free);
+    const newUsdcBalance = parseFloat(assetsData.quoteAsset.free);
+    const newAssetBalance = parseFloat(assetsData.baseAsset.free);
 
     const profitOrLoss = ((initialPrice - executedPrice) * executedQuantity).toFixed(2);
     const profitPercentage = (((initialPrice - executedPrice) / initialPrice) * 100).toFixed(2);
@@ -54,24 +55,24 @@ const handleCloseShort = async (
         bot.sendMessage(
             chatId,
             `✅ Short clôturé : PAYÉ ! 🤑🤑🤑🤑\n\n` +
-            `- Symbole : BTC / USDC\n` +
+            `- Symbole : ${symbol}\n` +
             `- Gain réalisé 💶 : +${profitOrLoss} USDC\n` +
             `- Pourcentage réalisé 📊 : +${profitPercentage} %\n\n` +
             `- Gains mensuels 💰 : ${minusOrPlusMonthly}${totalProfitMonthly.toFixed(2)} USDC, ${minusOrPlusMonthly}${totalProfitMonthlyPercentage} %\n` +
             `- Gains totaux 💰💰 : ${minusOrPlusCumulative}${totalProfitCumulative.toFixed(2)} USDC, ${minusOrPlusCumulative}${totalProfitCumulativePercentage} %\n\n` +
-            `- Capital disponible 💎 : ${newUsdcBalance.toFixed(2)} USDC, ${newBtcBalance} BTC\n\n` +
+            `- Capital disponible 💎 : ${newUsdcBalance.toFixed(2)} USDC, ${newAssetBalance} ${symbol === 'BTCUSDC' ? 'BTC' : 'DOGE'}\n\n` +
             `💪 ${getGainMessage()}`
         );
     } else {
         bot.sendMessage(
             chatId,
             `✅ Short clôturé : Pas payé. 💩\n\n` +
-            `- Symbole : BTC / USDC\n` +
+            `- Symbole : ${symbol}\n` +
             `- Perte réalisée 💩 : -${Math.abs(profitOrLoss)} USDC\n` +
             `- Pourcentage réalisé 📊 : ${profitPercentage} %\n\n` +
             `- Gains mensuels 💰 : ${minusOrPlusMonthly}${totalProfitMonthly.toFixed(2)} USDC, ${minusOrPlusMonthly}${totalProfitMonthlyPercentage} %\n` +
             `- Gains totaux 💰💰 : ${minusOrPlusCumulative}${totalProfitCumulative.toFixed(2)} USDC, ${minusOrPlusCumulative}${totalProfitCumulativePercentage} %\n\n` +
-            `- Capital disponible 💎 : ${newUsdcBalance.toFixed(2)} USDC, ${newBtcBalance} BTC\n\n` +
+            `- Capital disponible 💎 : ${newUsdcBalance.toFixed(2)} USDC, ${newAssetBalance} ${symbol === 'BTCUSDC' ? 'BTC' : 'DOGE'}\n\n` +
             `🧘 ${getLossMessage()}`
         );
     }

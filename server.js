@@ -64,9 +64,9 @@ const createWebSocketForSymbol = async (symbol) => {
                 const executedQuantity = parseFloat(message.q);
 
                 if (message.S === 'SELL') {
-                    handleCloseLong(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId, binanceMargin);
+                    handleCloseLong(symbol, initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId, binanceMargin);
                 } else if (message.S === 'BUY') {
-                    handleCloseShort(initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
+                    handleCloseShort(symbol, initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
                 }
             }
         }

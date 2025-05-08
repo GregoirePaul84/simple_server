@@ -1,7 +1,7 @@
 const { getBalanceData } = require("../getBalanceData");
 
-async function clearLongDust(binanceMargin) {
-    let balanceData = await getBalanceData(); // Récupère le solde après la clôture
+async function clearLongDust(symbol, binanceMargin) {
+    let balanceData = await getBalanceData(symbol); // Récupère le solde après la clôture
     const btcRemaining = parseFloat(balanceData.baseAsset.free);
 
     if (btcRemaining > 0.00001) { // Vérifie s'il reste un montant tradable
