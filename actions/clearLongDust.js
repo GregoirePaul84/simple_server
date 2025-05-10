@@ -1,26 +1,41 @@
 const { getBalanceData } = require("../getBalanceData");
+const { getDecimalPlaces } = require("../getDecimalPlaces");
 
 async function clearLongDust(symbol, binanceMargin) {
-    let balanceData = await getBalanceData(symbol); // Récupère le solde après la clôture
-    const assetsRemaining = parseFloat(balanceData.baseAsset.free);
+    try {
+        // Récupérer les soldes après la clôture
+        const balanceData = await getBalanceData(symbol);
+        const assetsRemaining = parseFloat(balanceData.baseAsset.free);
 
-    if (assetsRemaining > 0.00001) { // Vérifie s'il reste un montant tradable
-        console.log(`Liquidation des résidus après un LONG ${symbol} : ${assetsRemaining}`);
-        
-        try {
+        // Récupérer les contraintes de lot size (stepSize / minQty)
+        const exchangeInfo = await binanceMargin.exchangeInfo();
+        const symbolInfo = exchangeInfo.symbols.find(s => s.symbol === symbol);
+        const lotSizeFilter = symbolInfo.filters.find(f => f.filterType === 'LOT_SIZE');
+        const stepSize = parseFloat(lotSizeFilter.stepSize);
+        const minQty = parseFloat(lotSizeFilter.minQty);
+        const decimalPlaces = getDecimalPlaces(stepSize);
+
+        // Arrondi correct à la décimale autorisée
+        let adjustedQty = Math.floor(assetsRemaining / stepSize) * stepSize;
+        adjustedQty = parseFloat(adjustedQty.toFixed(decimalPlaces));
+
+        if (adjustedQty >= minQty) {
+            console.log(`💡 Liquidation des résidus après un LONG ${symbol} : ${adjustedQty}`);
+
             await binanceMargin.marginOrder({
                 symbol,
                 side: 'SELL',
                 type: 'MARKET',
-                quantity: assetsRemaining,
+                quantity: adjustedQty,
                 isIsolated: true,
             });
-            console.log(`Résidus vendus avec succès pour ${symbol}.`);
-        } catch (error) {
-            console.error("Erreur lors de la liquidation des résidus :", error);
+
+            console.log(`✅ Résidus vendus avec succès pour ${symbol}.`);
+        } else {
+            console.log(`⚠️ Quantité trop faible pour liquidation : ${adjustedQty} < minQty (${minQty})`);
         }
-    } else {
-        console.log('Pas de résidus à nettoyer à la clôture du long.');
+    } catch (error) {
+        console.error("❌ Erreur lors de la liquidation des résidus :", error.response?.data || error.message);
     }
 }
 

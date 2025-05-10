@@ -8,6 +8,16 @@ const getLossMessage = () => {
         "Rien ne se perd, tout s’apprend. 🌱",
         "L'échec est simplement l'opportunité de recommencer, cette fois plus intelligemment. 🧠",
         "Même les plus grandes montagnes se gravissent un pas à la fois. 🏔️",
+        "C'est dans la tempête que le marin apprend à naviguer. ⛵",
+        "Un pas en arrière n’est pas un échec, c’est l’élan pour mieux sauter. 🦘",
+        "Les racines poussent dans l’obscurité avant de voir la lumière. 🌱",
+        "Ce n'est pas la fin, c'est juste un détour vers un meilleur chemin. 🔁",
+        "L’art de gagner commence par l’acceptation de perdre. 🎭",
+        "Même un jour rouge n’efface pas une vision verte. 🟢",
+        "Les pertes d’aujourd’hui sont les fondations des victoires de demain. 🏗️",
+        "Tu n'as pas échoué tant que tu n'as pas abandonné. 🔁",
+        "Chaque cicatrice est la preuve que tu avances. ⚔️",
+        "Les meilleurs traders sont forgés dans la douleur, pas dans la facilité. 🔥",
     ];
     return messages[Math.floor(Math.random() * messages.length)];
 };
@@ -24,6 +34,16 @@ const getGainMessage = () => {
         "Mieux qu’une promo Black Friday : +1 trade gagnant dans la poche ! 🛍️💰",
         "Bientôt, on appellera ça 'la méthode Grégoire' ! 😎🎯",
         "Le portefeuille sourit, et toi aussi. 😄📈",
+        "Le marché t’a respecté… et ton portefeuille aussi. 💪📈",
+        "Ce n’est pas de la chance, c’est du talent. 🎯💼",
+        "Encore un comme ça et Binance te propose un CDI. 💻💰",
+        "On dirait bien que tu trades les étoiles. 🌟🚀",
+        "Même Warren Buffett veut savoir comment tu fais. 📞📊",
+        "Tu ne trades pas… tu danses avec les chiffres. 💃🪙",
+        "T’as pas cliqué… t’as déclenché une impression de billets. 🖨️💸",
+        "Jackpot validé. On encaisse, on respire, on repart. 🎲✅",
+        "Ton wallet commence à prendre de l’embonpoint. 🐷💳",
+        "La machine est lancée. Tu viens de passer en mode légende. 🏆🔥",
     ];
     return messages[Math.floor(Math.random() * messages.length)];
 };
