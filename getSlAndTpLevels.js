@@ -1,5 +1,5 @@
 function getSlAndTpLevels(type) {
-
+    
     let sl;
     let tp;
 
@@ -31,10 +31,12 @@ function getSlAndTpLevels(type) {
         case 'DOGE_SHORT_RANGE':
             sl = 1.5;
             tp = 2.57;
+            break;
 
         case 'DOGE_SHORT_DUMP':
             sl = 1.5;
             tp = 2.8;
+            break;
 
         default:
             throw new Error(`Type d'achat non reconnu : ${type}`);
