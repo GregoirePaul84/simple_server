@@ -25,7 +25,7 @@ function getSlAndTpLevels(type) {
 
         case 'DOGE_OVERSOLD':
             sl = 1.6;
-            tp = 2.3;
+            tp = 3.3;
             break;
 
         case 'DOGE_SHORT_RANGE':
