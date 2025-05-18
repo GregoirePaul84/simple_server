@@ -12,6 +12,7 @@ function getSlAndTpLevels(type) {
         case 'BTC_SHORT':
             sl = 5.11;
             tp = 8.94;
+            break;
         
         case 'DOGE_PUMP':
             sl = 1.0;
