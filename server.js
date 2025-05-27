@@ -52,7 +52,7 @@ const createWebSocketForSymbol = async (symbol) => {
         console.log(`WebSocket connecté pour ${symbol}.`);
     });
 
-    ws.on('message', (data) => {
+    ws.on('message', async(data) => {
         const message = JSON.parse(data);
         console.log(`Message WebSocket reçu pour ${symbol}:`, message);
 
@@ -63,11 +63,27 @@ const createWebSocketForSymbol = async (symbol) => {
                 const executedPrice = parseFloat(message.p);
                 const executedQuantity = parseFloat(message.q);
 
-                if (message.S === 'SELL') {
-                    handleCloseLong(symbol, initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId, binanceMargin);
-                } else if (message.S === 'BUY') {
-                    handleCloseShort(symbol, initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
+                try {
+                    
+                    if (message.S === 'SELL') {
+                        await handleCloseLong(symbol, initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId, binanceMargin);
+                    } else if (message.S === 'BUY') {
+                        await handleCloseShort(symbol, initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
+
+                        await binanceMargin.marginRepay({
+                            asset: symbol.replace('USDC', ''),
+                            amount: executedQuantity,
+                            isIsolated: true,
+                            symbol,
+                        });
+
+                        console.log(`✅ Remboursement effectué pour ${symbol}`);
+                    }
+                    
+                } catch (error) {
+                    
                 }
+                
             }
         }
     });
