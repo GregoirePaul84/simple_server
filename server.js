@@ -81,7 +81,7 @@ const createWebSocketForSymbol = async (symbol) => {
                     }
 
                 } catch (error) {
-                    console.error(`❌ Erreur lors de la clôture ou du remboursement :`, err.message);
+                    console.error(`❌ Erreur lors de la clôture ou du remboursement :`, error.message);
                 }              
             }
         }
