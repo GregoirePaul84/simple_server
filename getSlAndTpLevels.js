@@ -15,7 +15,7 @@ function getSlAndTpLevels(type) {
             break;
         
         case 'DOGE_PUMP':
-            sl = 1.0;
+            sl = 1.4;
             tp = 3.1;
             break;
         
