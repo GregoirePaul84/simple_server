@@ -39,6 +39,42 @@ function getSlAndTpLevels(type) {
             tp = 2.8;
             break;
 
+        // DOGE 30min 
+        case 'DOGE_LONG_CORRIDOR':
+            sl = 3.7;
+            tp = 7.0;
+            break;
+
+        case 'DOGE_LONG_SMALL_CORRIDOR':
+            sl = 2.9;
+            tp = 4.8;
+            break;
+
+        case 'DOGE_PUMP_30':
+            sl = 4.0;
+            tp = 5.9;
+            break;
+
+        case 'DOGE_LONG_NARROW':
+            sl = 2.4;
+            tp = 4.0;
+            break;
+
+        case 'DOGE_SHORT_PANIC':
+            sl = 2.0;
+            tp = 6.8;
+            break;
+
+        case 'DOGE_SHORT_NARROW':
+            sl = 2.7;
+            tp = 4.4;
+            break;
+
+        case 'DOGE_SHORT_CROSSUNDER_ZONE_HIGH':
+            sl = 4.3;
+            tp = 7.0;
+            break;
+
         default:
             throw new Error(`Type d'achat non reconnu : ${type}`);
     }
