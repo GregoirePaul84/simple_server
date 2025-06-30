@@ -75,6 +75,11 @@ function getSlAndTpLevels(type) {
             tp = 7.0;
             break;
 
+        case 'DOGE_SHORT_SMALL_ZONE':
+            sl = 3.5;
+            tp = 5.8;
+            break;
+
         default:
             throw new Error(`Type d'achat non reconnu : ${type}`);
     }
