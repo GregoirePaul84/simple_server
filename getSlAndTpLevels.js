@@ -56,7 +56,7 @@ function getSlAndTpLevels(type) {
             break;
 
         case 'DOGE_LONG_NARROW':
-            sl = 2.4;
+            sl = 3.2;
             tp = 4.0;
             break;
 
