@@ -89,6 +89,9 @@ function getSlAndTpLevels(type) {
             throw new Error(`Type d'achat non reconnu : ${type}`);
     }
 
+    sl_buffer = 0.1; // Pour les problèmes de sync / slippage avec tradingview
+    sl += sl_buffer;
+
     return { stop_loss: sl, take_profit: tp }
 }
 
