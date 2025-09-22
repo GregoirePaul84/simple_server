@@ -27,7 +27,7 @@ const takeShortPosition = async (
     // 🔹 Calcul de l'actif à vendre
     const feeRate = 0.00075;
     const marginForFees = 1 - feeRate;
-    let quantityToSell = (usdcBalance / price) * marginForFees;
+    let quantityToSell = (usdcBalance / price) * marginForFees * 0.7;
     quantityToSell = Math.floor(quantityToSell / stepSize) * stepSize;
     quantityToSell = parseFloat(quantityToSell.toFixed(decimalPlaces));
 
