@@ -10,6 +10,8 @@ const takeShortPosition = async (
     bot,
     chatId
 ) => {
+    console.log('début du short...');
+    
     if (usdcBalance <= 0) {
         console.error('Solde insuffisant en USDC pour vendre à découvert.');
         throw new Error('Solde insuffisant en USDC pour vendre à découvert.');
@@ -27,7 +29,7 @@ const takeShortPosition = async (
     // 🔹 Calcul de l'actif à vendre
     const feeRate = 0.00075;
     const marginForFees = 1 - feeRate;
-    let quantityToSell = (usdcBalance / price) * marginForFees * 0.7;
+    let quantityToSell = (usdcBalance / price) * marginForFees;
     quantityToSell = Math.floor(quantityToSell / stepSize) * stepSize;
     quantityToSell = parseFloat(quantityToSell.toFixed(decimalPlaces));
 
@@ -43,15 +45,28 @@ const takeShortPosition = async (
     // 🔹 Déduction automatique de l'actif à emprunter (ex: DOGE)
     const loanAsset = symbol.replace('USDC', '');
 
+    try {
+        const maxBorrow = await binance.marginMaxBorrow({
+            asset: `${loanAsset}`,
+            isolatedSymbol: `${symbol}`,
+            recvWindow: 5000
+        });
+
+        console.log(`Max borrowable pour ${loanAsset}:`, maxBorrow);
+    } catch (error) {
+        console.error('Erreur lors du calcul de l\'emprunt :', error.message);
+        throw error;
+    }
+    
     // 🔹 Étape 1 : Emprunt
     try {
         console.log(`Demande d'emprunt de ${quantityToSell} ${loanAsset}.`);
         const loanResponse = await binance.marginLoan({
             asset: loanAsset,
             amount: quantityToSell,
-            isIsolated: true,
-            symbol,
+            isolatedSymbol: symbol // ⚠️ au lieu de "symbol"
         });
+
         console.log(`Emprunt de ${quantityToSell} ${loanAsset} effectué.`, loanResponse);
     } catch (error) {
         console.error('Erreur lors de l\'emprunt :', error.message);

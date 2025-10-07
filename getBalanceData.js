@@ -1,6 +1,8 @@
 const { getIsolatedMarginAccount } = require('./getIsolatedMarginAccount');
 
 const getBalanceData = async(symbol) => {
+    console.log(`Récup de la balance pour ${symbol}`);
+    
     // Récupération du solde pour le portefeuille de marge isolée
     const marginAccount = await getIsolatedMarginAccount(
         process.env.BINANCE_MARGIN_API_KEY,

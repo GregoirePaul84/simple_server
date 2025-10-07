@@ -35,6 +35,7 @@ const binanceMargin = Binance({
     apiSecret: process.env.BINANCE_MARGIN_API_SECRET,
     reconnect: true, // Permet de se reconnecter automatiquement
     verbose: true, // Affiche les logs pour aider au débogage
+    getTime: () => Date.now()
 });
 
 // Variables de base
@@ -235,6 +236,7 @@ app.post('/webhook', async (req, res) => {
             // Récupération de la balance USDC avant la vente
             let balanceData = await getBalanceData(symbol);
             const usdcBalance = parseFloat(balanceData.quoteAsset.free);
+            
             console.log('balance USDC avant position courte =>', usdcBalance);
 
             const shortOrder = await takeShortPosition(binanceMargin, symbol, type, price, usdcBalance, bot, chatId);

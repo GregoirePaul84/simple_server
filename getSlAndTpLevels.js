@@ -47,17 +47,17 @@ function getSlAndTpLevels(type) {
 
         case 'DOGE_LONG_SMALL_CORRIDOR':
             sl = 2.9;
-            tp = 4.8;
+            tp = 3.7;
             break;
 
         case 'DOGE_PUMP_30':
             sl = 4.0;
-            tp = 5.9;
+            tp = 5.0;
             break;
 
         case 'DOGE_SMALL_PUMP_30':
             sl = 3.8;
-            tp = 6.1;
+            tp = 5.0;
             break;
 
         case 'DOGE_LONG_NARROW':
@@ -66,23 +66,23 @@ function getSlAndTpLevels(type) {
             break;
 
         case 'DOGE_SHORT_PANIC':
-            sl = 2.0;
-            tp = 6.8;
+            sl = 3.5;
+            tp = 7.0;
             break;
 
         case 'DOGE_SHORT_NARROW':
-            sl = 2.7;
-            tp = 4.4;
+            sl = 3.4;
+            tp = 4.8;
             break;
 
         case 'DOGE_SHORT_CROSSUNDER_ZONE_HIGH':
             sl = 4.3;
-            tp = 7.0;
+            tp = 8.0;
             break;
 
         case 'DOGE_SHORT_SMALL_ZONE':
             sl = 3.5;
-            tp = 5.8;
+            tp = 5.2;
             break;
 
         default:
