@@ -12,7 +12,6 @@ const { placeOCOOrder } = require('./actions/placeOcoOrder');
 const { scheduleMonthlyReport, sendMonthlyReport } = require('./monthlyReport'); // Import du fichier pour le rapport mensuel
 const { handleCloseLong } = require('./actions/handleCloseLong');
 const { handleCloseShort } = require('./actions/handleCloseShort');
-const schedule = require('node-schedule'); // Librairie pour le planificateur
 const WebSocket = require('ws');
 const { getIsolatedMarginListenKey, keepAliveMarginListenKey } = require('./websocket');
 
@@ -39,10 +38,14 @@ const binanceMargin = Binance({
 });
 
 // Variables de base
-let initialPrice = null; // Prix initial de la position
+
 let totalProfitMonthly = 0; // Total du mois en cours
 let totalProfitCumulative = 0; // Total depuis le début
 const initialCapital = 2000; // Capital initial en USDC
+const initialPrices = {
+    BTCUSDC: null,
+    DOGEUSDC: null
+};
 
 // Connecter le WebSocket utilisateur pour détecter le passage des ordres OCO
 const createWebSocketForSymbol = async (symbol) => {
@@ -67,9 +70,9 @@ const createWebSocketForSymbol = async (symbol) => {
                 try {
                     
                     if (message.S === 'SELL') {
-                        await handleCloseLong(symbol, initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId, binanceMargin);
+                        await handleCloseLong(symbol, initialPrices[symbol], executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId, binanceMargin);
                     } else if (message.S === 'BUY') {
-                        await handleCloseShort(symbol, initialPrice, executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
+                        await handleCloseShort(symbol, initialPrices[symbol], executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
 
                         await binanceMargin.marginRepay({
                             asset: symbol.replace('USDC', ''),
@@ -203,8 +206,11 @@ app.post('/webhook', async (req, res) => {
         const price = parseFloat(prices[symbol]);
 
         console.log(`Prix actuel de l'actif pour ${symbol} => ${price} USDC`);
+
+        initialPrices[symbol] = longOrder.initialPrice;
         
         // ****** GESTION POSITION LONGUE  ****** //
+
         // ACHAT LONG
         if (action === 'LONG') {           
             
@@ -215,8 +221,9 @@ app.post('/webhook', async (req, res) => {
 
             const longOrder = await takeLongPosition(binanceMargin, symbol, type, price, usdcBalance, bot, chatId);
 
-            initialPrice = longOrder.initialPrice;
-            console.log(`Actifs achetés sur ${initialPrice} pour ${symbol}`);
+            initialPrices[symbol] = longOrder.initialPrice;
+
+            console.log(`Actifs achetés sur ${initialPrices[symbol]} pour ${symbol}`);
 
             const assetsBought = parseFloat(longOrder.order.executedQty); // Quantité exacte achetée
             console.log('Actifs achetés dans cet ordre :', assetsBought);
@@ -241,10 +248,11 @@ app.post('/webhook', async (req, res) => {
 
             const shortOrder = await takeShortPosition(binanceMargin, symbol, type, price, usdcBalance, bot, chatId);
 
-            initialPrice = shortOrder.initialPrice;
-            console.log(`actif shorté sur ${initialPrice} ${symbol === 'BTCUSDC' ? 'BTC' : 'USDC'}`);
+            initialPrices[symbol] = shortOrder.initialPrice;
 
-            const assetsSold = parseFloat(shortOrder.order.executedQty); // Quantité exacte achetée
+            console.log(`Actifs shortés sur ${initialPrices[symbol]} pour ${symbol}`);
+
+            const assetsSold = parseFloat(shortOrder.order.executedQty); // Quantité exacte vendue
             console.log('Nombre shorté dans cet ordre :', assetsSold);
 
             const feeRate = 0.001;
