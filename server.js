@@ -206,8 +206,6 @@ app.post('/webhook', async (req, res) => {
         const price = parseFloat(prices[symbol]);
 
         console.log(`Prix actuel de l'actif pour ${symbol} => ${price} USDC`);
-
-        initialPrices[symbol] = longOrder.initialPrice;
         
         // ****** GESTION POSITION LONGUE  ****** //
 
