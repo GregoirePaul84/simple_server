@@ -69,6 +69,7 @@ const takeShortPosition = async (
             asset: loanAsset,
             amount: quantityToSell.toString(),
             symbol: `${symbol}`,
+            isIsolated: 'TRUE',
             apiKey: process.env.BINANCE_MARGIN_API_KEY,
             apiSecret: process.env.BINANCE_MARGIN_API_SECRET
         });
@@ -79,7 +80,10 @@ const takeShortPosition = async (
         console.log(`Emprunt de ${quantityToSell} ${loanAsset} effectué.`);
         
     } catch (error) {        
-        console.error('Erreur lors de l\'emprunt :', error.message);
+        const msg = error.response?.data?.msg || error.message;
+        const code = error.response?.data?.code;
+        console.error('Erreur lors de l\'emprunt :', msg);
+        console.error('le code erreur =>', code);
         throw error;
     }
 
