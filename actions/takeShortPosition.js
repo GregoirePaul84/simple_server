@@ -65,11 +65,16 @@ const takeShortPosition = async (
 
         console.log(`🔹 début de l\'emprunt pour ${loanAsset}...`);
 
+        console.log({
+            asset: loanAsset,
+            amount: quantityToSell.toString(),
+            symbol,
+        });
+
         const response = await isolatedMarginLoanRaw({
             asset: loanAsset,
             amount: quantityToSell.toString(),
             symbol: `${symbol}`,
-            isIsolated: 'TRUE',
             apiKey: process.env.BINANCE_MARGIN_API_KEY,
             apiSecret: process.env.BINANCE_MARGIN_API_SECRET
         });
