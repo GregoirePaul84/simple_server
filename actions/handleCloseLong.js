@@ -79,7 +79,7 @@ const handleCloseLong = async (
         );
     }
 
-    await clearLongDust(symbol, binanceMargin); // Vente des résidus au marché
+    // await clearLongDust(symbol, binanceMargin); // Vente des résidus au marché
 
     initialPrice = null;
 };
