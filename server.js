@@ -70,7 +70,7 @@ const createWebSocketForSymbol = async (symbol) => {
                 try {
                     
                     if (message.S === 'SELL') {
-                        await handleCloseLong(symbol, initialPrices[symbol], executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId, binanceMargin);
+                        await handleCloseLong(symbol, initialPrices[symbol], executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
                     } else if (message.S === 'BUY') {
                         await handleCloseShort(symbol, initialPrices[symbol], executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
 

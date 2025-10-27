@@ -13,7 +13,7 @@ const getBalanceData = async(symbol) => {
     const balanceData = marginAccount.assets.find(asset => asset.symbol === symbol);
     
     if (!balanceData) {
-        throw new Error(`La paire ${balanceData} n\'a pas été trouvée dans le portefeuille isolé.`);
+        throw new Error(`La paire ${balanceData} n'a pas été trouvée dans le portefeuille isolé.`);
     }
 
     return balanceData;

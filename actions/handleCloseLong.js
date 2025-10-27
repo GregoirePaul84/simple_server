@@ -1,6 +1,6 @@
 const { getGainMessage, getLossMessage } = require('../botmessages');
 const { getIsolatedMarginAccount } = require('../getIsolatedMarginAccount');
-const { clearLongDust } = require('./clearLongDust');
+// const { clearLongDust } = require('./clearLongDust');
 
 const handleCloseLong = async (
     symbol,
@@ -12,7 +12,7 @@ const handleCloseLong = async (
     totalProfitMonthly,
     bot,
     chatId,
-    binanceMargin
+    // binanceMargin
 ) => {
 
     if (!initialPrice || !executedPrice || !executedQuantity) {

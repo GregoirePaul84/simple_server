@@ -45,7 +45,7 @@ const takeShortPosition = async (
     try {
         console.log('loanAsset =>', loanAsset);
 
-        const maxBorrow = await binance.marginMaxBorrow({ asset: loanAsset, isolatedSymbol: symbol });
+        const maxBorrow = await binance.marginMaxBorrow({ asset: loanAsset, isolatedSymbol: symbol, isIsolated: 'TRUE' })
         const maxAmount = parseFloat(maxBorrow.amount);
         if (maxAmount <= 0) throw new Error(`Aucun montant empruntable pour ${loanAsset}.`);
 
@@ -53,7 +53,12 @@ const takeShortPosition = async (
 
         quantityToSell = Math.min(quantityToSell, maxAmount);
 
-        console.log('quantité définitive =>', quantityToSell);
+        console.log({
+            usdcBalance,
+            price,
+            quantityToSell,
+            maxAmount
+        });
 
     } catch (error) {
         console.error('Erreur lors du calcul de l\'emprunt :', error.message);
@@ -63,7 +68,7 @@ const takeShortPosition = async (
     // 🔹 Étape 1 : Emprunt
     try {
 
-        console.log(`🔹 début de l\'emprunt pour ${loanAsset}...`);
+        console.log(`🔹 début de l'emprunt pour ${loanAsset}...`);
 
         console.log({
             asset: loanAsset,
@@ -80,7 +85,6 @@ const takeShortPosition = async (
         });
 
         console.log('la réponse =>', response);
-        
 
         console.log(`Emprunt de ${quantityToSell} ${loanAsset} effectué.`);
         
