@@ -14,6 +14,7 @@ const { handleCloseLong } = require('./actions/handleCloseLong');
 const { handleCloseShort } = require('./actions/handleCloseShort');
 const WebSocket = require('ws');
 const { getIsolatedMarginListenKey, keepAliveMarginListenKey } = require('./websocket');
+const { repayDebtForSymbol } = require('./repayDebtForSymbol');
 
 // Configuration de Telegram
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
@@ -56,38 +57,61 @@ const createWebSocketForSymbol = async (symbol) => {
         console.log(`WebSocket connecté pour ${symbol}.`);
     });
 
+    // Lock anti double traitement sur le même WS
+    let orderHandled = false;
+
     ws.on('message', async(data) => {
         const message = JSON.parse(data);
         console.log(`Message WebSocket reçu pour ${symbol}:`, message);
 
-        if (message.e === 'executionReport' && message.X === 'FILLED') {
-            if (message.o === 'STOP_LOSS_LIMIT' || message.o === 'LIMIT_MAKER') {
-                console.log(`Ordre OCO exécuté pour ${message.s}`);
+        // On ne garde que ce qui concerne les ordres exécutés
+        if (message.e !== 'executionReport') return;
+        if (message.X !== 'FILLED') return;
 
-                const executedPrice = parseFloat(message.p);
-                const executedQuantity = parseFloat(message.q);
+        // On ne garde que la fermeture d'un OCO (STOP ou LIMIT)
+        if (!['STOP_LOSS_LIMIT', 'LIMIT_MAKER'].includes(message.o)) return;
 
-                try {
-                    
-                    if (message.S === 'SELL') {
-                        await handleCloseLong(symbol, initialPrices[symbol], executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
-                    } else if (message.S === 'BUY') {
-                        await handleCloseShort(symbol, initialPrices[symbol], executedPrice, executedQuantity, initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId);
+        // Protège contre les partial fills ou plusieurs events
+        if (orderHandled) {
+            console.warn(`⛔ Event ignoré car déjà traité pour ${symbol}`);
+            return;
+        }
 
-                        await binanceMargin.marginRepay({
-                            asset: symbol.replace('USDC', ''),
-                            amount: executedQuantity,
-                            isIsolated: true,
-                            symbol,
-                        });
+        orderHandled = true;
 
-                        console.log(`✅ Remboursement effectué pour ${symbol}`);
-                    }
+        console.log(`✅ Ordre OCO exécuté pour ${message.s}`);
 
-                } catch (error) {
-                    console.error(`❌ Erreur lors de la clôture ou du remboursement :`, error.message);
-                }              
+        const executedPrice = parseFloat(message.p);
+        const executedQuantity = parseFloat(message.q);
+
+        try {
+            if (message.S === 'SELL') {
+                // Fermeture d’un LONG
+                await handleCloseLong(
+                    symbol, initialPrices[symbol], executedPrice, executedQuantity,
+                    initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId
+                );
             }
+
+            else if (message.S === 'BUY') {
+                // Fermeture d’un SHORT
+                await handleCloseShort(
+                    symbol, initialPrices[symbol], executedPrice, executedQuantity,
+                    initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId
+                );
+
+                // ✅ Remboursement total
+                await repayDebtForSymbol(symbol, binanceMargin);
+
+                // ✅ Double check 1.5s après (latence mise à jour Binance)
+                setTimeout(async () => {
+                    await repayDebtForSymbol(symbol, binanceMargin);
+                }, 1500);
+            }
+
+        } catch (error) {
+            console.error(`❌ Erreur lors du traitement WebSocket pour ${symbol}:`, error.message);
+            orderHandled = false; // On annule le verrou pour retenter si crash
         }
     });
 
@@ -101,7 +125,7 @@ const createWebSocketForSymbol = async (symbol) => {
     });
 
     // Keep alive
-    setInterval(() => keepAliveMarginListenKey(listenKey, symbol), 50 * 60 * 1000);
+    setInterval(() => keepAliveMarginListenKey(listenKey, symbol), 25 * 60 * 1000);
 };
 
 const startUserWebSocket = async () => {
