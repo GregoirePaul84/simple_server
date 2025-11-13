@@ -15,31 +15,6 @@ function getSlAndTpLevels(type) {
             sl = 5.11;
             tp = 8.94;
             break;
-        
-        case 'DOGE_PUMP':
-            sl = 1.4;
-            tp = 3.1;
-            break;
-        
-        case 'DOGE_RANGE':
-            sl = 1.3;
-            tp = 2.7;
-            break;
-
-        case 'DOGE_OVERSOLD':
-            sl = 1.6;
-            tp = 3.3;
-            break;
-
-        case 'DOGE_SHORT_RANGE':
-            sl = 1.5;
-            tp = 2.57;
-            break;
-
-        case 'DOGE_SHORT_DUMP':
-            sl = 1.5;
-            tp = 2.8;
-            break;
 
         // DOGE 30min 
         case 'DOGE_LONG_CORRIDOR':
@@ -58,7 +33,7 @@ function getSlAndTpLevels(type) {
             break;
 
         case 'DOGE_SMALL_PUMP_30':
-            sl = 3.8;
+            sl = 3.4;
             tp = 4.5;
             break;
 
