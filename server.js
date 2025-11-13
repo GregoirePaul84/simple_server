@@ -15,6 +15,7 @@ const { handleCloseShort } = require('./actions/handleCloseShort');
 const WebSocket = require('ws');
 const { getIsolatedMarginListenKey, keepAliveMarginListenKey } = require('./websocket');
 const { repayDebtForSymbol } = require('./repayDebtForSymbol');
+const { getPositionStatus } = require('./getPositionStatus');
 
 // Configuration de Telegram
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
@@ -230,6 +231,27 @@ app.post('/webhook', async (req, res) => {
         const price = parseFloat(prices[symbol]);
 
         console.log(`Prix actuel de l'actif pour ${symbol} => ${price} USDC`);
+
+        // 🧠 Vérifier s'il y a déjà une position significative ouverte
+        const positionStatus = await getPositionStatus(symbol, price);
+        console.log(`Status position pour ${symbol} :`, positionStatus);
+
+        if (positionStatus.hasOpenPosition) {
+            const direction = positionStatus.hasLong ? 'LONG' : 'SHORT';
+
+            const msg = `⚠️ Trade bloqué sur ${symbol} :
+                        - Position déjà ouverte côté Binance
+                        - Direction: ${direction}
+                        - Long notionnel: ${positionStatus.longNotional.toFixed(2)} USDC
+                        - Short notionnel: ${positionStatus.shortNotional.toFixed(2)} USDC
+
+                        Trade manuel requis.`;
+
+            console.warn(msg);
+            await bot.sendMessage(chatId, msg);
+
+            return res.status(200).send('Trade bloqué : position déjà ouverte sur Binance.');
+        }
         
         // ****** GESTION POSITION LONGUE  ****** //
 
