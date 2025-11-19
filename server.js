@@ -21,11 +21,11 @@ const { getPositionStatus } = require('./getPositionStatus');
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
 const chatId = process.env.TELEGRAM_CHAT_ID;
 
-const externalURL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`;
-
 // Instance Express
 const app = express();
 const port = 3000;
+
+const externalURL = `http://localhost:${port}`;
 
 // Middleware pour traiter les JSON reçus par tradingview
 app.use(bodyParser.json());

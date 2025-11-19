@@ -1,7 +1,7 @@
 // positionStatus.js
 const { getIsolatedMarginAccount } = require('./getIsolatedMarginAccount');
 
-const MIN_NOTIONAL_USD = 5; // seuil à partir duquel on considère que c'est une vraie position
+const MIN_NOTIONAL_USD = 10; // seuil à partir duquel on considère que c'est une vraie position
 
 async function getPositionStatus(symbol, price) {
     const account = await getIsolatedMarginAccount(
