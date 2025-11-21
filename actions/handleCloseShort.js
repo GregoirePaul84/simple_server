@@ -8,11 +8,18 @@ const handleCloseShort = async (
     executedPrice,
     executedQuantity,
     initialCapital,
-    totalProfitCumulative,
-    totalProfitMonthly,
+    profits,
     bot,
     chatId
 ) => {
+
+    console.log('DEBUG handleCloseShort inputs', {
+        symbol,
+        initialPrice,
+        executedPrice,
+        executedQuantity,
+    });
+
     if (!initialPrice || !executedPrice || !executedQuantity) {
         console.error('Données manquantes pour calculer les profits ou pertes.');
         bot.sendMessage(
@@ -42,14 +49,14 @@ const handleCloseShort = async (
 
     console.log(`Profit ou Perte : ${profitOrLoss} USDC, ${profitPercentage}%`);
 
-    totalProfitMonthly += parseFloat(profitOrLoss);
-    totalProfitCumulative += parseFloat(profitOrLoss);
+    profits.monthly += parseFloat(profitOrLoss);
+    profits.cumulative += parseFloat(profitOrLoss);
 
-    const totalProfitMonthlyPercentage = ((totalProfitMonthly / initialCapital) * 100).toFixed(2);
-    const totalProfitCumulativePercentage = ((totalProfitCumulative / initialCapital) * 100).toFixed(2);
+    const totalProfitMonthlyPercentage = ((profits.monthly / initialCapital) * 100).toFixed(2);
+    const totalProfitCumulativePercentage = ((profits.cumulative / initialCapital) * 100).toFixed(2);
 
-    const minusOrPlusMonthly = totalProfitMonthly >= 0 ? '+' : '';
-    const minusOrPlusCumulative = totalProfitCumulative >= 0 ? '+' : '';
+    const minusOrPlusMonthly = profits.monthly >= 0 ? '+' : '';
+    const minusOrPlusCumulative = profits.cumulative >= 0 ? '+' : '';
 
     if (profitOrLoss >= 0) {
         bot.sendMessage(
@@ -58,8 +65,8 @@ const handleCloseShort = async (
             `- Symbole : ${symbol}\n` +
             `- Gain réalisé 💶 : +${profitOrLoss} USDC\n` +
             `- Pourcentage réalisé 📊 : +${profitPercentage} %\n\n` +
-            `- Gains mensuels 💰 : ${minusOrPlusMonthly}${totalProfitMonthly.toFixed(2)} USDC, ${minusOrPlusMonthly}${totalProfitMonthlyPercentage} %\n` +
-            `- Gains totaux 💰💰 : ${minusOrPlusCumulative}${totalProfitCumulative.toFixed(2)} USDC, ${minusOrPlusCumulative}${totalProfitCumulativePercentage} %\n\n` +
+            `- Gains mensuels 💰 : ${minusOrPlusMonthly}${profits.monthly.toFixed(2)} USDC, ${minusOrPlusMonthly}${totalProfitMonthlyPercentage} %\n` +
+            `- Gains totaux 💰💰 : ${minusOrPlusCumulative}${profits.cumulative.toFixed(2)} USDC, ${minusOrPlusCumulative}${totalProfitCumulativePercentage} %\n\n` +
             `- Capital disponible 💎 : ${newUsdcBalance.toFixed(2)} USDC, ${newAssetBalance} ${symbol === 'BTCUSDC' ? 'BTC' : 'DOGE'}\n\n` +
             `💪 ${getGainMessage()}`
         );
@@ -70,8 +77,8 @@ const handleCloseShort = async (
             `- Symbole : ${symbol}\n` +
             `- Perte réalisée 💩 : -${Math.abs(profitOrLoss)} USDC\n` +
             `- Pourcentage réalisé 📊 : ${profitPercentage} %\n\n` +
-            `- Gains mensuels 💰 : ${minusOrPlusMonthly}${totalProfitMonthly.toFixed(2)} USDC, ${minusOrPlusMonthly}${totalProfitMonthlyPercentage} %\n` +
-            `- Gains totaux 💰💰 : ${minusOrPlusCumulative}${totalProfitCumulative.toFixed(2)} USDC, ${minusOrPlusCumulative}${totalProfitCumulativePercentage} %\n\n` +
+            `- Gains mensuels 💰 : ${minusOrPlusMonthly}${profits.monthly.toFixed(2)} USDC, ${minusOrPlusMonthly}${totalProfitMonthlyPercentage} %\n` +
+            `- Gains totaux 💰💰 : ${minusOrPlusCumulative}${profits.cumulative.toFixed(2)} USDC, ${minusOrPlusCumulative}${totalProfitCumulativePercentage} %\n\n` +
             `- Capital disponible 💎 : ${newUsdcBalance.toFixed(2)} USDC, ${newAssetBalance} ${symbol === 'BTCUSDC' ? 'BTC' : 'DOGE'}\n\n` +
             `🧘 ${getLossMessage()}`
         );

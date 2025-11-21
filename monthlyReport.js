@@ -26,7 +26,7 @@ const sendMonthlyReport = (
     } else {
         // Rapport négatif
         const negativeMessage = 
-        `📅 Rapport mensuel : Pas payé. 😔\n` +
+        `📅 Rapport mensuel : Pas payé. 😔\n\n` +
         `- Pertes totales mensuelles 💰 : ${Math.abs(totalProfitMonthly).toFixed(2)} USDT\n` +
         `- Pourcentage de pertes mensuel 📊 : ${Math.abs(totalProfitPercentage)} %\n\n` +
         `- Gains totaux cumulés 💰💰 : ${totalProfitCumulative.toFixed(2)} USDT\n` +

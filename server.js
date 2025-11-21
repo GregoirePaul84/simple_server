@@ -41,12 +41,14 @@ const binanceMargin = Binance({
 
 // Variables de base
 
-let totalProfitMonthly = 0; // Total du mois en cours
-let totalProfitCumulative = 0; // Total depuis le début
 const initialCapital = 2000; // Capital initial en USDC
 const initialPrices = {
     BTCUSDC: null,
     DOGEUSDC: null
+};
+const profits = {
+  monthly: 0,
+  cumulative: 0,
 };
 
 // Connecter le WebSocket utilisateur pour détecter le passage des ordres OCO
@@ -90,7 +92,7 @@ const createWebSocketForSymbol = async (symbol) => {
                 // Fermeture d’un LONG
                 await handleCloseLong(
                     symbol, initialPrices[symbol], executedPrice, executedQuantity,
-                    initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId
+                    initialCapital, profits, bot, chatId
                 );
             }
 
@@ -98,7 +100,7 @@ const createWebSocketForSymbol = async (symbol) => {
                 // Fermeture d’un SHORT
                 await handleCloseShort(
                     symbol, initialPrices[symbol], executedPrice, executedQuantity,
-                    initialCapital, totalProfitMonthly, totalProfitCumulative, bot, chatId
+                    initialCapital, profits, bot, chatId
                 );
 
                 // ✅ Remboursement total
@@ -138,7 +140,7 @@ const startUserWebSocket = async () => {
 
 // Setter pour réinitialiser les profits mensuels
 const resetMonthlyProfit = () => {
-    totalProfitMonthly = 0;
+    profits.monthly = 0;
     console.log('Profit mensuel réinitialisé.');
 };
 
@@ -178,7 +180,7 @@ app.get('/buy-test', (_, res) => {
 // Test du compte rendu mensuel
 app.get('/test-monthly-report', (_, res) => {
     // Appel direct à la fonction pour générer un rapport
-    sendMonthlyReport(bot, chatId, totalProfitCumulative, initialCapital, totalProfitMonthly);
+    sendMonthlyReport(bot, chatId, profits.cumulative, initialCapital, profits.monthly);
     res.status(200).send('Rapport mensuel envoyé (test).');
 });
 
@@ -336,7 +338,7 @@ app.listen(port, () => {
 
 const init = () => {
     startUserWebSocket(); // Données de Binance
-    scheduleMonthlyReport(bot, chatId, () => totalProfitCumulative, () => totalProfitMonthly, resetMonthlyProfit); // Rapport Telegram mensuel
+    scheduleMonthlyReport(bot, chatId, () => profits.cumulative, () => profits.monthly, resetMonthlyProfit); // Rapport Telegram mensuel
 }
 
 init();
