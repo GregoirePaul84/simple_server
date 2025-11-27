@@ -12,146 +12,149 @@ const takeShortPosition = async (
     bot,
     chatId
 ) => {
-    console.log('début du short...');
-    
+    console.log('⬇️ Début de la position short...');
+
     if (usdcBalance <= 0) {
-        console.error('Solde insuffisant en USDC pour vendre à découvert.');
-        throw new Error('Solde insuffisant en USDC pour vendre à découvert.');
+        throw new Error('Solde USDC insuffisant en marge isolée.');
     }
 
-    // 🔹 Récupération dynamique des règles de lot
+    // -------------------------------
+    // 🔍 1. Récupération des règles du marché
+    // -------------------------------
     const exchangeInfo = await binance.exchangeInfo();
     const symbolInfo = exchangeInfo.symbols.find(s => s.symbol === symbol);
 
-    const lotSizeFilter = symbolInfo.filters.find(f => f.filterType === 'LOT_SIZE');
-    const stepSize = parseFloat(lotSizeFilter.stepSize);
-    const minQty = parseFloat(lotSizeFilter.minQty);
-    const decimalPlaces = getDecimalPlaces(stepSize);
+    const lot = symbolInfo.filters.find(f => f.filterType === 'LOT_SIZE');
+    const stepSize = parseFloat(lot.stepSize);
+    const minQty = parseFloat(lot.minQty);
+    const decimals = getDecimalPlaces(stepSize);
 
-    // 🔹 Calcul de la quantité à vendre
+    const asset = symbol.replace('USDC', ''); // BTC ou DOGE
+
+    // -------------------------------
+    // 🧮 2. Calcul de la quantité à vendre
+    // -------------------------------
     const feeRate = 0.001;
-    const marginForFees = 1 - feeRate;
-    let quantityToSell = (usdcBalance / price) * marginForFees;
-    quantityToSell = Math.floor(quantityToSell / stepSize) * stepSize;
-    quantityToSell = parseFloat(quantityToSell.toFixed(decimalPlaces));
+    let qty = (usdcBalance / price) * (1 - feeRate); // provision fees
+    qty = Math.floor(qty / stepSize) * stepSize;
+    qty = parseFloat(qty.toFixed(decimals));
 
-    // Vérifications de base
-    if (quantityToSell < minQty) throw new Error(`Quantité trop faible (${quantityToSell})`);
-    if (quantityToSell * price < 5) throw new Error(`Valeur < 5 USDC.`);
-
-    // 🔹 Déduction automatique de l'actif à emprunter (ex: DOGE)
-    const loanAsset = symbol.replace('USDC', '');
-
-    try {
-        console.log('loanAsset =>', loanAsset);
-
-        const maxBorrow = await binance.marginMaxBorrow({ asset: loanAsset, isolatedSymbol: symbol, isIsolated: 'TRUE' })
-        const maxAmount = parseFloat(maxBorrow.amount);
-        if (maxAmount <= 0) throw new Error(`Aucun montant empruntable pour ${loanAsset}.`);
-
-        console.log('quantité à vendre =>', quantityToSell, 'max empruntable =>', maxAmount);
-
-        quantityToSell = Math.min(quantityToSell, maxAmount);
-
-        console.log({
-            usdcBalance,
-            price,
-            quantityToSell,
-            maxAmount
-        });
-
-    } catch (error) {
-        console.error('Erreur lors du calcul de l\'emprunt :', error.message);
-        throw error;
+    if (qty < minQty) {
+        throw new Error(`Quantité trop faible : ${qty}`);
     }
-    
-    // 🔹 Étape 1 : Emprunt
+
+    console.log(`🔢 Quantité demandée : ${qty}`);
+
+    // -------------------------------
+    // 🔐 3. Vérification du max borrow réel
+    // -------------------------------
+
+    const borrowInfo = await binance.marginMaxBorrow({
+        asset,
+        isolatedSymbol: symbol,
+        isIsolated: 'TRUE'
+    });
+
+    const maxBorrowable = parseFloat(borrowInfo.amount);
+
+    console.log(`📊 Max empruntable selon Binance : ${maxBorrowable}`);
+
+    if (maxBorrowable <= 0) {
+        throw new Error(`Montant empruntable nul pour ${symbol}.`);
+    }
+
+    // Limitation stricte
+    if (qty > maxBorrowable) {
+        console.warn(`⚠️ Quantité réduite de ${qty} → ${maxBorrowable}`);
+        qty = maxBorrowable;
+        qty = parseFloat((Math.floor(qty / stepSize) * stepSize).toFixed(decimals));
+    }
+
+    // Vérif finale
+    if (qty <= 0) {
+        throw new Error('Quantité finale invalide après limitation.');
+    }
+
+    console.log(`📉 Quantité finale à emprunter : ${qty} ${asset}`);
+
+    // -------------------------------
+    // 🏦 4. Emprunt de l'actif
+    // -------------------------------
     try {
+        console.log(`💼 Emprunt de ${qty} ${asset}...`);
 
-        console.log(`🔹 début de l'emprunt pour ${loanAsset}...`);
-
-        console.log({
-            asset: loanAsset,
-            amount: quantityToSell.toString(),
+        const borrowResult = await isolatedMarginLoanRaw({
+            asset,
+            amount: qty.toString(),
             symbol,
-        });
-
-        const response = await isolatedMarginLoanRaw({
-            asset: loanAsset,
-            amount: quantityToSell.toString(),
-            symbol: `${symbol}`,
             apiKey: process.env.BINANCE_MARGIN_API_KEY,
             apiSecret: process.env.BINANCE_MARGIN_API_SECRET
         });
 
-        console.log('la réponse =>', response);
+        console.log('➡️ Emprunt OK :', borrowResult);
 
-        console.log(`Emprunt de ${quantityToSell} ${loanAsset} effectué.`);
-        
-    } catch (error) {        
-        const msg = error.response?.data?.msg || error.message;
-        const code = error.response?.data?.code;
-        console.error('Erreur lors de l\'emprunt :', msg);
-        console.error('le code erreur =>', code);
-        throw error;
+    } catch (err) {
+        const msg = err.response?.data?.msg || err.message;
+        const code = err.response?.data?.code;
+        console.error(`❌ Erreur emprunt : ${msg} (code ${code})`);
+        throw err;
     }
 
-    // 🔹 Étape 2 : Vente à découvert
+    // -------------------------------
+    // 📉 5. Passage de l’ordre de vente
+    // -------------------------------
     let order;
 
     try {
-
-        console.log('Passage de l\'ordre de vente.');
+        console.log('📤 Passage de la vente à découvert...');
 
         order = await binance.marginOrder({
             symbol,
             side: 'SELL',
             type: 'MARKET',
-            quantity: quantityToSell,
-            isIsolated: 'TRUE',
+            quantity: qty,
+            isIsolated: 'TRUE'
         });
 
-        console.log('Ordre de vente à découvert effectué.', order);
+        console.log('📈 Vente effectuée :', order);
 
     } catch (error) {
+        console.error('❌ Erreur lors de la vente :', error.message);
 
-        console.error('Erreur lors de l\'ordre de vente à découvert :', error.message);
-
-        // ⚠️ Rembourse l'emprunt si l'ordre échoue
+        // Remboursement en cas d’échec
         await binance.marginRepay({
-            asset: loanAsset,
-            amount: quantityToSell,
+            asset,
+            amount: qty,
             isIsolated: 'TRUE',
-            symbol,
+            symbol
         });
 
-        console.log(`${loanAsset} remboursé après échec de la vente.`);
-
+        console.log('🔄 Emprunt remboursé automatiquement.');
         throw error;
     }
 
-    // 🔹 Étape 3 : SL / TP
-    const slAndTpLevels = getSlAndTpLevels(type);
-    const initialPrice = parseFloat(order.fills[0]?.price) || price;
-    const stopLoss = initialPrice * (1 + slAndTpLevels.stop_loss / 100);
-    const takeProfit = initialPrice * (1 - slAndTpLevels.take_profit / 100);
+    // -------------------------------
+    // 🎯 6. SL / TP + Telegram
+    // -------------------------------
+    const slTp = getSlAndTpLevels(type);
+    const entry = parseFloat(order.fills?.[0]?.price) || price;
 
-    const potentialGain = (initialPrice - takeProfit) * quantityToSell;
-    const potentialLoss = (stopLoss - initialPrice) * quantityToSell;
+    const sl = entry * (1 + slTp.stop_loss / 100);
+    const tp = entry * (1 - slTp.take_profit / 100);
 
-    // 🔹 Telegram
+    const pnlPotential = (entry - tp) * qty;
+    const lossPotential = (sl - entry) * qty;
+
     bot.sendMessage(
         chatId,
-        `✅ Ordre de vente à découvert exécuté :
-        - Symbole : ${symbol}
-        - Prix de vente : ${initialPrice} USDC
-        - Capital investi : ${usdcBalance.toFixed(2)} USDC
-        - Quantité vendue : ${quantityToSell}
-        - Gain potentiel : +${potentialGain.toFixed(2)} USDC
-        - Perte potentielle : -${potentialLoss.toFixed(2)} USDC`
+        `📉 **Short exécuté sur ${symbol}**\n\n` +
+        `• Prix : ${entry} USDC\n` +
+        `• Quantité : ${qty}\n` +
+        `• Gain potentiel : +${pnlPotential.toFixed(2)} USDC\n` +
+        `• Perte potentielle : -${lossPotential.toFixed(2)} USDC\n`
     );
 
-    return { order, initialPrice };
+    return { order, initialPrice: entry };
 };
 
 module.exports = { takeShortPosition };
