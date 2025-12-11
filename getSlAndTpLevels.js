@@ -39,7 +39,7 @@ function getSlAndTpLevels(type) {
 
         case 'DOGE_LONG_NARROW':
             sl = 3.2;
-            tp = 4.0;
+            tp = 4.5;
             break;
 
         case 'DOGE_SHORT_PANIC':
@@ -49,7 +49,7 @@ function getSlAndTpLevels(type) {
 
         case 'DOGE_SHORT_NARROW':
             sl = 3.4;
-            tp = 4.6;
+            tp = 4.3;
             break;
 
         case 'DOGE_SHORT_CROSSUNDER_ZONE_HIGH':
