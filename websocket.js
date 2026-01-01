@@ -21,30 +21,43 @@ const getIsolatedMarginListenKey = async (symbol) => {
     }
 };
 
-// Renouveler le listenKey
+// Renouveller le listen key
 const keepAliveMarginListenKey = async (listenKey, symbol) => {
-    try {
-        console.log(`Renouvellement de la listenKey : ${listenKey}`);
+  try {
+    console.log(`Renouvellement listenKey ${symbol}: ${listenKey}`);
 
-        const response = await axios.put(
-            `https://api.binance.com/sapi/v1/userDataStream/isolated`, // Correction de l'URL
-            null,
-            {
-                headers: { 'X-MBX-APIKEY': process.env.BINANCE_MARGIN_API_KEY },
-                params: { listenKey, symbol } // Paramètre ici et non dans l'URL
-            }
-        );
+    await axios.put(
+      `https://api.binance.com/sapi/v1/userDataStream/isolated`,
+      null,
+      {
+        headers: { 'X-MBX-APIKEY': process.env.BINANCE_MARGIN_API_KEY },
+        params: { listenKey, symbol }
+      }
+    );
 
-        console.log('✅ ListenKey renouvelé avec succès pour le portefeuille Margin.', response.data);
-    } catch (error) {
-        console.error('❌ Erreur lors du renouvellement du listenKey Margin :', error.response?.data || error.message);
+    console.log(`✅ ListenKey renouvelée avec succès pour ${symbol}`);
+    return false; // pas besoin de reconnect
+  } catch (error) {
+    const status = error.response?.status;
+    const msg = error.response?.data || error.message;
+    console.error(`❌ KeepAlive listenKey ${symbol}:`, msg);
 
-        // Vérifie si l'erreur est due à une clé expirée et régénère un listenKey
-        if (error.response?.status === 400) {
-            console.error('🔄 ListenKey invalide ou expirée. Génération d\'une nouvelle clé...');
-            return await getIsolatedMarginListenKey('BTCUSDC'); // Fonction pour générer une nouvelle listenKey
-        }
+    // ✅ Erreurs réseau intermittentes : on ne reconnect pas forcément
+    if (error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN' || error.code === 'ETIMEDOUT') {
+      console.warn(`🌐 Problème réseau/DNS temporaire pour ${symbol}, on retentera au prochain tick.`);
+      return false;
     }
+
+    // ✅ 400 = listenKey invalide/expirée => on demande une reconnexion
+    if (status === 400) {
+      console.warn(`🔑 ListenKey expirée/invalide pour ${symbol} => reconnexion nécessaire.`);
+      return true;
+    }
+
+    // Autres 
+    return false;
+  }
 };
+
 
 module.exports = { getIsolatedMarginListenKey, keepAliveMarginListenKey };
