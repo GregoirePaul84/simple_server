@@ -53,16 +53,19 @@ const placeOCOOrder = async (binance, symbol, type, side, price, assetsAvailable
         const tickSize = parseFloat(priceFilter.tickSize);
         const priceDecimalPlaces = getDecimalPlaces(tickSize);
 
+        const closeSide = side === 'BUY' ? 'SELL' : 'BUY';
+
         // Passer l'ordre OCO
         const ocoOrder = await binance.marginOrderOco({
             symbol,
-            side: side === 'BUY' ? 'SELL' : 'BUY', // Si on a acheté, on vend pour clôturer
+            side: closeSide, // Si on a acheté, on vend pour clôturer
             quantity: finalQuantity,        // Quantité arrondie
             price: takeProfitPrice.toFixed(priceDecimalPlaces),    // Prix du Take Profit
             stopPrice: stopLossPrice.toFixed(priceDecimalPlaces),  // Prix du Stop Loss
             stopLimitPrice: stopLimitPrice.toFixed(priceDecimalPlaces), // Prix limite du Stop Loss
             stopLimitTimeInForce: 'GTC',          // Good 'Til Cancelled
             isIsolated: true,                     // Utilisation du portefeuille isolé
+            sideEffectType: closeSide === 'BUY' ? 'AUTO_REPAY' : 'NO_SIDE_EFFECT',
         });
 
         console.log('Ordre OCO passé avec succès :', ocoOrder);

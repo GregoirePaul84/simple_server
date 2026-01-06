@@ -135,13 +135,13 @@ const createWebSocketForSymbol = async (symbol) => {
           chatId
         );
 
-        // ✅ Remboursement total
-        await repayDebtForSymbol(symbol, binanceMargin);
+        // // ✅ Remboursement total
+        // await repayDebtForSymbol(symbol, binanceMargin);
 
-        // ✅ Double check 1.5s après (latence mise à jour Binance)
-        setTimeout(async () => {
-          await repayDebtForSymbol(symbol, binanceMargin);
-        }, 1500);
+        // // ✅ Double check 1.5s après (latence mise à jour Binance)
+        // setTimeout(async () => {
+        //   await repayDebtForSymbol(symbol, binanceMargin);
+        // }, 1500);
       }
     } catch (error) {
       console.error(
@@ -439,12 +439,10 @@ app.post("/webhook", async (req, res) => {
     }
 
     bot.sendMessage(chatId, `❌ Erreur : ${error.message}`);
-    res
-      .status(500)
-      .json({
-        message: "Erreur lors de l'exécution de l'ordre.",
-        error: error.message,
-      });
+    res.status(500).json({
+      message: "Erreur lors de l'exécution de l'ordre.",
+      error: error.message,
+    });
     return { order: null, initialPrice: null };
   }
 });
