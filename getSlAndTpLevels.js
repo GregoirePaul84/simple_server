@@ -6,12 +6,12 @@ function getSlAndTpLevels(type) {
 
   switch (type) {
     case "BTC_LONG":
-      sl = 5.38;
+      sl = 6.15;
       tp = 8.59;
       break;
 
     case "BTC_SHORT":
-      sl = 5.11;
+      sl = 5.24;
       tp = 8.94;
       break;
 
