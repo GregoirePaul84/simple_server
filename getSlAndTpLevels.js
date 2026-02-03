@@ -97,7 +97,7 @@ function getSlAndTpLevels(type) {
       break;
 
     case "DOGE_SHORT_CONTINUED":
-      sl = 2.8;
+      sl = 4.7;
       tp = 5.7;
       break;
 
