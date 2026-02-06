@@ -102,8 +102,8 @@ function getSlAndTpLevels(type) {
       break;
 
     case "DOGE_SHORT_RARE_PANIC":
-      sl = 3.0;
-      tp = 15.0;
+      sl = 3.5;
+      tp = 10.0;
       break;
 
     default:
