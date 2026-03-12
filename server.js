@@ -44,14 +44,15 @@ const binanceMargin = Binance({
 
 // Variables de base
 
-const initialCapital = 2000; // Capital initial en USDC
+const initialCapital = 2000; // Capital initial par actif en USDC
+const totalCapital = initialCapital * 2; // BTC + DOGE
 const initialPrices = {
   BTCUSDC: null,
   DOGEUSDC: null,
 };
 const profits = {
-  monthly: 0,
-  cumulative: 0,
+  BTCUSDC: { monthly: 0, cumulative: 0 },
+  DOGEUSDC: { monthly: 0, cumulative: 0 },
 };
 
 const wsBySymbol = new Map();
@@ -81,6 +82,22 @@ const createWebSocketForSymbol = async (symbol) => {
   ws.on("open", () => {
     console.log(`WebSocket connecté pour ${symbol}.`);
   });
+
+  // ✅ Watchdog : détecte les déconnexions silencieuses via les pings Binance (~3min)
+  let lastPingAt = Date.now();
+
+  ws.on("ping", () => {
+    lastPingAt = Date.now();
+    ws.pong();
+  });
+
+  const pingWatchdog = setInterval(() => {
+    if (Date.now() - lastPingAt > 5 * 60 * 1000) {
+      console.warn(`⚠️ Aucun ping reçu depuis 5min pour ${symbol}, reconnexion forcée`);
+      clearInterval(pingWatchdog);
+      ws.terminate();
+    }
+  }, 60 * 1000);
 
   // Lock anti double traitement sur le même WS
   let orderHandled = false;
@@ -118,7 +135,7 @@ const createWebSocketForSymbol = async (symbol) => {
           executedPrice,
           executedQuantity,
           initialCapital,
-          profits,
+          profits[symbol],
           bot,
           chatId
         );
@@ -130,7 +147,7 @@ const createWebSocketForSymbol = async (symbol) => {
           executedPrice,
           executedQuantity,
           initialCapital,
-          profits,
+          profits[symbol],
           bot,
           chatId
         );
@@ -143,6 +160,7 @@ const createWebSocketForSymbol = async (symbol) => {
         //   await repayDebtForSymbol(symbol, binanceMargin);
         // }, 1500);
       }
+      orderHandled = false; // ✅ Réinitialisation pour le prochain trade
     } catch (error) {
       console.error(
         `❌ Erreur lors du traitement WebSocket pour ${symbol}:`,
@@ -158,7 +176,6 @@ const createWebSocketForSymbol = async (symbol) => {
 
   ws.on("close", () => {
     console.log(`WebSocket pour ${symbol} fermé. Reconnexion dans 5s...`);
-    setTimeout(() => createWebSocketForSymbol(symbol), 5000);
 
     // ✅ IMPORTANT : stop le keepAlive
     const t = keepAliveBySymbol.get(symbol);
@@ -195,7 +212,8 @@ const startUserWebSocket = async () => {
 
 // Setter pour réinitialiser les profits mensuels
 const resetMonthlyProfit = () => {
-  profits.monthly = 0;
+  profits.BTCUSDC.monthly = 0;
+  profits.DOGEUSDC.monthly = 0;
   console.log("Profit mensuel réinitialisé.");
 };
 
@@ -238,9 +256,9 @@ app.get("/test-monthly-report", (_, res) => {
   sendMonthlyReport(
     bot,
     chatId,
-    profits.cumulative,
-    initialCapital,
-    profits.monthly
+    profits.BTCUSDC.cumulative + profits.DOGEUSDC.cumulative,
+    totalCapital,
+    profits.BTCUSDC.monthly + profits.DOGEUSDC.monthly
   );
   res.status(200).send("Rapport mensuel envoyé (test).");
 });
@@ -457,9 +475,10 @@ const init = () => {
   scheduleMonthlyReport(
     bot,
     chatId,
-    () => profits.cumulative,
-    () => profits.monthly,
-    resetMonthlyProfit
+    () => profits.BTCUSDC.cumulative + profits.DOGEUSDC.cumulative,
+    () => profits.BTCUSDC.monthly + profits.DOGEUSDC.monthly,
+    resetMonthlyProfit,
+    totalCapital
   ); // Rapport Telegram mensuel
 };
 

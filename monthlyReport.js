@@ -38,12 +38,12 @@ const sendMonthlyReport = (
 };
 
 
-const scheduleMonthlyReport = (bot, chatId, getTotalProfitCumulative, getTotalProfitMonthly, resetMonthlyProfit) => {
+const scheduleMonthlyReport = (bot, chatId, getTotalProfitCumulative, getTotalProfitMonthly, resetMonthlyProfit, initialCapital) => {
     schedule.scheduleJob('59 23 28-31 * *', () => {
         const today = new Date();
         const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
         if (today.getDate() === lastDayOfMonth) {
-            sendMonthlyReport(bot, chatId, getTotalProfitCumulative(), 100, getTotalProfitMonthly());
+            sendMonthlyReport(bot, chatId, getTotalProfitCumulative(), initialCapital, getTotalProfitMonthly());
             resetMonthlyProfit();
         }
     });
