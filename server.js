@@ -132,6 +132,7 @@ const createWebSocketForSymbol = async (symbol) => {
 
     // On ne garde que ce qui concerne les ordres exécutés
     if (event.e !== "executionReport") return;
+    if (event.s !== symbol) return; // filtre par paire (token unifié = events pour toutes les paires)
     if (event.X !== "FILLED") return;
 
     // On ne garde que la fermeture d’un OCO (STOP ou LIMIT)
