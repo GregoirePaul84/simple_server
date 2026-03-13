@@ -503,7 +503,7 @@ const init = async () => {
     console.error("⚠️  Le serveur démarre quand même, mais des fonctionnalités peuvent être indisponibles.");
   }
 
-  startUserWebSocket(); // Données de Binance
+  await startUserWebSocket(); // Données de Binance
   scheduleMonthlyReport(
     bot,
     chatId,

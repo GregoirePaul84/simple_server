@@ -6,10 +6,7 @@ const getIsolatedMarginListenToken = async (symbol) => {
         const response = await axios.post(
             'https://api.binance.com/sapi/v1/userListenToken',
             null,
-            {
-                headers: { 'X-MBX-APIKEY': process.env.BINANCE_MARGIN_API_KEY },
-                params: { symbol, accountType: 'ISOLATED_MARGIN' }
-            }
+            { headers: { 'X-MBX-APIKEY': process.env.BINANCE_MARGIN_API_KEY } }
         );
 
         if (!response.data?.listenToken) {
