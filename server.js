@@ -422,10 +422,11 @@ app.post("/webhook", async (req, res) => {
       const assetsSold = parseFloat(shortOrder.order.executedQty); // Quantité exacte vendue
       console.log("Nombre shorté dans cet ordre :", assetsSold);
 
-      const feeRate = 0.001;
-      const assetsAvailable = assetsSold * (1 - feeRate); // Enlève les frais
+      // Pour un SHORT, les frais de vente sont payés en USDC, pas en actif.
+      // L'OCO doit racheter exactement la quantité empruntée pour éviter les résidus de dette.
+      const assetsAvailable = assetsSold;
       console.log(
-        `Actifs réellement disponible après frais: ${assetsAvailable}`
+        `Actifs à racheter (quantité empruntée) : ${assetsAvailable}`
       );
 
       // Ordre OCO : gestion des SL et TP en limit
