@@ -13,10 +13,7 @@ const { scheduleMonthlyReport, sendMonthlyReport } = require("./monthlyReport");
 const { handleCloseLong } = require("./actions/handleCloseLong");
 const { handleCloseShort } = require("./actions/handleCloseShort");
 const WebSocket = require("ws");
-const {
-  getIsolatedMarginListenKey,
-  keepAliveMarginListenKey,
-} = require("./websocket");
+const { getIsolatedMarginListenToken } = require("./websocket");
 const { repayDebtForSymbol } = require("./repayDebtForSymbol");
 const { getPositionStatus } = require("./getPositionStatus");
 
@@ -75,12 +72,17 @@ const createWebSocketForSymbol = async (symbol) => {
     keepAliveBySymbol.delete(symbol);
   }
 
-  const listenKey = await getIsolatedMarginListenKey(symbol);
-  const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${listenKey}`);
+  const listenToken = await getIsolatedMarginListenToken(symbol);
+  const ws = new WebSocket("wss://ws-api.binance.com:443/ws-api/v3");
   wsBySymbol.set(symbol, ws);
 
   ws.on("open", () => {
-    console.log(`WebSocket connecté pour ${symbol}.`);
+    ws.send(JSON.stringify({
+      id: `sub-${symbol}`,
+      method: "userDataStream.subscribe.listenToken",
+      params: { listenToken },
+    }));
+    console.log(`WebSocket connecté pour ${symbol}, subscription envoyée.`);
   });
 
   // ✅ Watchdog : détecte les déconnexions silencieuses via les pings Binance (~3min)
@@ -104,14 +106,27 @@ const createWebSocketForSymbol = async (symbol) => {
 
   ws.on("message", async (data) => {
     const message = JSON.parse(data);
-    console.log(`Message WebSocket reçu pour ${symbol}:`, message);
+
+    // Réponse de subscription (nouveau WS API : { id, status, result })
+    if (message.status !== undefined) {
+      if (message.status === 200) {
+        console.log(`✅ Subscription WebSocket confirmée pour ${symbol}`);
+      } else {
+        console.error(`❌ Erreur subscription WebSocket pour ${symbol}:`, message);
+      }
+      return;
+    }
+
+    // Les events arrivent soit dans message.data (WS API), soit directement
+    const event = message.data || message;
+    console.log(`Message WebSocket reçu pour ${symbol}:`, event);
 
     // On ne garde que ce qui concerne les ordres exécutés
-    if (message.e !== "executionReport") return;
-    if (message.X !== "FILLED") return;
+    if (event.e !== "executionReport") return;
+    if (event.X !== "FILLED") return;
 
-    // On ne garde que la fermeture d'un OCO (STOP ou LIMIT)
-    if (!["STOP_LOSS_LIMIT", "LIMIT_MAKER"].includes(message.o)) return;
+    // On ne garde que la fermeture d’un OCO (STOP ou LIMIT)
+    if (!["STOP_LOSS_LIMIT", "LIMIT_MAKER"].includes(event.o)) return;
 
     // Protège contre les partial fills ou plusieurs events
     if (orderHandled) {
@@ -121,13 +136,13 @@ const createWebSocketForSymbol = async (symbol) => {
 
     orderHandled = true;
 
-    console.log(`✅ Ordre OCO exécuté pour ${message.s}`);
+    console.log(`✅ Ordre OCO exécuté pour ${event.s}`);
 
-    const executedPrice = parseFloat(message.p);
-    const executedQuantity = parseFloat(message.q);
+    const executedPrice = parseFloat(event.p);
+    const executedQuantity = parseFloat(event.q);
 
     try {
-      if (message.S === "SELL") {
+      if (event.S === "SELL") {
         // Fermeture d’un LONG
         await handleCloseLong(
           symbol,
@@ -139,7 +154,7 @@ const createWebSocketForSymbol = async (symbol) => {
           bot,
           chatId
         );
-      } else if (message.S === "BUY") {
+      } else if (event.S === "BUY") {
         // Fermeture d’un SHORT
         await handleCloseShort(
           symbol,
@@ -151,14 +166,6 @@ const createWebSocketForSymbol = async (symbol) => {
           bot,
           chatId
         );
-
-        // // ✅ Remboursement total
-        // await repayDebtForSymbol(symbol, binanceMargin);
-
-        // // ✅ Double check 1.5s après (latence mise à jour Binance)
-        // setTimeout(async () => {
-        //   await repayDebtForSymbol(symbol, binanceMargin);
-        // }, 1500);
       }
       orderHandled = false; // ✅ Réinitialisation pour le prochain trade
     } catch (error) {
@@ -186,21 +193,6 @@ const createWebSocketForSymbol = async (symbol) => {
     setTimeout(() => createWebSocketForSymbol(symbol), 5000);
   });
 
-  // ✅ Keep alive: si la listenKey est invalide => on ferme le WS (ça déclenche close + reconnexion)
-  const timerId = setInterval(async () => {
-    const shouldReconnect = await keepAliveMarginListenKey(listenKey, symbol);
-
-    if (shouldReconnect) {
-      console.warn(
-        `🔄 Reconnexion demandée pour ${symbol} (listenKey expirée/invalide)`
-      );
-      try {
-        ws.close();
-      } catch {}
-    }
-  }, 25 * 60 * 1000);
-
-  keepAliveBySymbol.set(symbol, timerId);
 };
 
 const startUserWebSocket = async () => {
