@@ -72,7 +72,7 @@ const createWebSocketForSymbol = async (symbol) => {
     keepAliveBySymbol.delete(symbol);
   }
 
-  const listenToken = await getIsolatedMarginListenToken(symbol);
+  const { token, expirationTime } = await getIsolatedMarginListenToken(symbol);
   const ws = new WebSocket("wss://ws-api.binance.com:443/ws-api/v3");
   wsBySymbol.set(symbol, ws);
 
@@ -80,10 +80,19 @@ const createWebSocketForSymbol = async (symbol) => {
     ws.send(JSON.stringify({
       id: `sub-${symbol}`,
       method: "userDataStream.subscribe.listenToken",
-      params: { listenToken },
+      params: { listenToken: token },
     }));
     console.log(`WebSocket connecté pour ${symbol}, subscription envoyée.`);
   });
+
+  // Refresh du token 1h avant expiration (~24h)
+  const msUntilExpiry = expirationTime - Date.now();
+  const refreshDelay = Math.max(msUntilExpiry - 60 * 60 * 1000, 5000);
+  const refreshTimer = setTimeout(() => {
+    console.log(`🔄 Token expiré pour ${symbol}, reconnexion...`);
+    try { ws.terminate(); } catch {}
+  }, refreshDelay);
+  keepAliveBySymbol.set(symbol, refreshTimer);
 
   // ✅ Watchdog : détecte les déconnexions silencieuses via les pings Binance (~3min)
   let lastPingAt = Date.now();

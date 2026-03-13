@@ -11,12 +11,12 @@ const getIsolatedMarginListenToken = async (symbol) => {
 
         console.log(`Réponse brute userListenToken pour ${symbol} :`, JSON.stringify(response.data));
 
-        if (!response.data?.listenToken) {
-            throw new Error('Aucun listenToken reçu pour le portefeuille Margin isolé.');
+        if (!response.data?.token) {
+            throw new Error('Aucun token reçu pour le portefeuille Margin isolé.');
         }
 
-        console.log(`ListenToken généré pour ${symbol} :`, response.data.listenToken);
-        return response.data.listenToken;
+        console.log(`Token généré pour ${symbol} :`, response.data.token);
+        return { token: response.data.token, expirationTime: response.data.expirationTime };
     } catch (error) {
         console.error('Erreur lors de la génération du listenToken Margin isolé :', error.message);
         throw error;
