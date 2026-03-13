@@ -499,14 +499,6 @@ const runStartupChecks = async () => {
   const me = await bot.getMe();
   console.log(`✅ Telegram bot connecté : @${me.username}`);
 
-  // 5. Génération listenKey pour chaque symbole
-  const symbols = ["BTCUSDC", "DOGEUSDC"];
-  for (const symbol of symbols) {
-    const listenKey = await getIsolatedMarginListenKey(symbol);
-    if (!listenKey) throw new Error(`Pas de listenKey pour ${symbol}`);
-    console.log(`✅ ListenKey OK pour ${symbol}`);
-  }
-
   console.log("🚀 Tous les tests de santé passés. Démarrage du serveur...");
 };
 
@@ -516,7 +508,7 @@ const init = async () => {
   } catch (err) {
     console.error("❌ Echec des tests de santé au démarrage :", err.message);
     if (err.response?.data) console.error("   Détail Binance :", err.response.data);
-    process.exit(1);
+    console.error("⚠️  Le serveur démarre quand même, mais des fonctionnalités peuvent être indisponibles.");
   }
 
   startUserWebSocket(); // Données de Binance
