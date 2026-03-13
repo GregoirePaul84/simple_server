@@ -9,6 +9,8 @@ const getIsolatedMarginListenToken = async (symbol) => {
             { headers: { 'X-MBX-APIKEY': process.env.BINANCE_MARGIN_API_KEY } }
         );
 
+        console.log(`Réponse brute userListenToken pour ${symbol} :`, JSON.stringify(response.data));
+
         if (!response.data?.listenToken) {
             throw new Error('Aucun listenToken reçu pour le portefeuille Margin isolé.');
         }
