@@ -470,7 +470,55 @@ app.listen(port, () => {
   console.log(`Serveur en cours d'exécution sur ${externalURL}`);
 });
 
-const init = () => {
+const runStartupChecks = async () => {
+  console.log("🔍 Démarrage des tests de santé...");
+
+  // 1. Variables d'environnement
+  const requiredEnvVars = [
+    "BINANCE_MARGIN_API_KEY",
+    "BINANCE_MARGIN_API_SECRET",
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_CHAT_ID",
+    "WEBHOOK_SECRET",
+  ];
+  const missingVars = requiredEnvVars.filter((v) => !process.env[v]);
+  if (missingVars.length > 0) {
+    throw new Error(`Variables d'environnement manquantes : ${missingVars.join(", ")}`);
+  }
+  console.log("✅ Variables d'environnement OK");
+
+  // 2. Connexion Binance (ping)
+  await binanceMargin.ping();
+  console.log("✅ Binance API accessible");
+
+  // 3. Clé API Binance valide (récupération du temps serveur + account check)
+  await binanceMargin.accountInfo({ useServerTime: true });
+  console.log("✅ Clé API Binance valide");
+
+  // 4. Telegram bot
+  const me = await bot.getMe();
+  console.log(`✅ Telegram bot connecté : @${me.username}`);
+
+  // 5. Génération listenKey pour chaque symbole
+  const symbols = ["BTCUSDC", "DOGEUSDC"];
+  for (const symbol of symbols) {
+    const listenKey = await getIsolatedMarginListenKey(symbol);
+    if (!listenKey) throw new Error(`Pas de listenKey pour ${symbol}`);
+    console.log(`✅ ListenKey OK pour ${symbol}`);
+  }
+
+  console.log("🚀 Tous les tests de santé passés. Démarrage du serveur...");
+};
+
+const init = async () => {
+  try {
+    await runStartupChecks();
+  } catch (err) {
+    console.error("❌ Echec des tests de santé au démarrage :", err.message);
+    if (err.response?.data) console.error("   Détail Binance :", err.response.data);
+    process.exit(1);
+  }
+
   startUserWebSocket(); // Données de Binance
   scheduleMonthlyReport(
     bot,
@@ -482,4 +530,7 @@ const init = () => {
   ); // Rapport Telegram mensuel
 };
 
-init();
+init().catch((err) => {
+  console.error("❌ Erreur fatale init :", err.message);
+  process.exit(1);
+});
