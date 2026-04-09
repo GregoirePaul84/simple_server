@@ -14,7 +14,6 @@ const { handleCloseLong } = require("./actions/handleCloseLong");
 const { handleCloseShort } = require("./actions/handleCloseShort");
 const WebSocket = require("ws");
 const { getIsolatedMarginListenToken } = require("./websocket");
-const { repayDebtForSymbol } = require("./repayDebtForSymbol");
 const { getPositionStatus } = require("./getPositionStatus");
 
 // Configuration de Telegram
@@ -73,16 +72,11 @@ const createWebSocketForSymbol = async (symbol) => {
   }
 
   const { token, expirationTime } = await getIsolatedMarginListenToken(symbol);
-  const ws = new WebSocket("wss://ws-api.binance.com:443/ws-api/v3");
+  const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${token}`);
   wsBySymbol.set(symbol, ws);
 
   ws.on("open", () => {
-    ws.send(JSON.stringify({
-      id: `sub-${symbol}`,
-      method: "userDataStream.subscribe.listenToken",
-      params: { listenToken: token },
-    }));
-    console.log(`WebSocket connecté pour ${symbol}, subscription envoyée.`);
+    console.log(`WebSocket connecté pour ${symbol} (stream endpoint).`);
   });
 
   // Refresh du token 1h avant expiration (~24h)
@@ -109,6 +103,7 @@ const createWebSocketForSymbol = async (symbol) => {
       ws.terminate();
     }
   }, 60 * 1000);
+  keepAliveBySymbol.set(`${symbol}_watchdog`, pingWatchdog);
 
   // Lock anti double traitement sur le même WS
   let orderHandled = false;
@@ -116,17 +111,7 @@ const createWebSocketForSymbol = async (symbol) => {
   ws.on("message", async (data) => {
     const message = JSON.parse(data);
 
-    // Réponse de subscription (nouveau WS API : { id, status, result })
-    if (message.status !== undefined) {
-      if (message.status === 200) {
-        console.log(`✅ Subscription WebSocket confirmée pour ${symbol}`);
-      } else {
-        console.error(`❌ Erreur subscription WebSocket pour ${symbol}:`, message);
-      }
-      return;
-    }
-
-    // Les events arrivent soit dans message.data (WS API), soit directement
+    // Les events arrivent soit dans message.data, soit directement
     const event = message.data || message;
     console.log(`Message WebSocket reçu pour ${symbol}:`, event);
 
@@ -148,7 +133,7 @@ const createWebSocketForSymbol = async (symbol) => {
 
     console.log(`✅ Ordre OCO exécuté pour ${event.s}`);
 
-    const executedPrice = parseFloat(event.p);
+    const executedPrice = parseFloat(event.L || event.p); // L = Last Executed Price (prix réel)
     const executedQuantity = parseFloat(event.q);
 
     try {
@@ -183,7 +168,8 @@ const createWebSocketForSymbol = async (symbol) => {
         `❌ Erreur lors du traitement WebSocket pour ${symbol}:`,
         error.message
       );
-      orderHandled = false; // On annule le verrou pour retenter si crash
+      bot.sendMessage(chatId, `❌ Erreur traitement OCO ${symbol}: ${error.message}`);
+      orderHandled = false;
     }
   });
 
@@ -194,10 +180,15 @@ const createWebSocketForSymbol = async (symbol) => {
   ws.on("close", () => {
     console.log(`WebSocket pour ${symbol} fermé. Reconnexion dans 5s...`);
 
-    // ✅ IMPORTANT : stop le keepAlive
+    // Stop refresh timer et watchdog
     const t = keepAliveBySymbol.get(symbol);
-    if (t) clearInterval(t);
+    if (t) clearTimeout(t);
     keepAliveBySymbol.delete(symbol);
+
+    const w = keepAliveBySymbol.get(`${symbol}_watchdog`);
+    if (w) clearInterval(w);
+    keepAliveBySymbol.delete(`${symbol}_watchdog`);
+
     wsBySymbol.delete(symbol);
 
     setTimeout(() => createWebSocketForSymbol(symbol), 5000);
