@@ -24,18 +24,4 @@ const getIsolatedMarginListenToken = async () => {
     }
 };
 
-// Garder le token en vie (Binance expire le token si pas de PUT toutes les ~60min)
-const keepAliveListenToken = async () => {
-    try {
-        await axios.put(
-            'https://api.binance.com/sapi/v1/userListenToken',
-            null,
-            { headers: { 'X-MBX-APIKEY': process.env.BINANCE_MARGIN_API_KEY } }
-        );
-        console.log('🔄 Keep-alive listenToken OK');
-    } catch (error) {
-        console.error('Erreur keep-alive listenToken :', error.message);
-    }
-};
-
-module.exports = { getIsolatedMarginListenToken, keepAliveListenToken };
+module.exports = { getIsolatedMarginListenToken };

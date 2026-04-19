@@ -13,7 +13,7 @@ const { scheduleMonthlyReport, sendMonthlyReport } = require("./monthlyReport");
 const { handleCloseLong } = require("./actions/handleCloseLong");
 const { handleCloseShort } = require("./actions/handleCloseShort");
 const WebSocket = require("ws");
-const { getIsolatedMarginListenToken, keepAliveListenToken } = require("./websocket");
+const { getIsolatedMarginListenToken } = require("./websocket");
 const { getPositionStatus } = require("./getPositionStatus");
 
 // Configuration de Telegram
@@ -57,7 +57,6 @@ const symbols = ["BTCUSDC", "DOGEUSDC"];
 let sharedWs = null;
 let sharedRefreshTimer = null;
 let sharedWatchdogTimer = null;
-let sharedKeepAliveTimer = null;
 
 // Lock anti double traitement, un par symbole
 const orderHandled = new Map(symbols.map((s) => [s, false]));
@@ -70,7 +69,6 @@ const createSharedWebSocket = async () => {
   }
   if (sharedRefreshTimer) { clearTimeout(sharedRefreshTimer); sharedRefreshTimer = null; }
   if (sharedWatchdogTimer) { clearInterval(sharedWatchdogTimer); sharedWatchdogTimer = null; }
-  if (sharedKeepAliveTimer) { clearInterval(sharedKeepAliveTimer); sharedKeepAliveTimer = null; }
 
   const { token, expirationTime } = await getIsolatedMarginListenToken();
   const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${token}`);
@@ -80,8 +78,6 @@ const createSharedWebSocket = async () => {
     console.log("WebSocket partagé connecté (BTCUSDC + DOGEUSDC).");
   });
 
-  // Keep-alive du token toutes les 30min (Binance expire après ~60min sans PUT)
-  sharedKeepAliveTimer = setInterval(keepAliveListenToken, 30 * 60 * 1000);
 
   // Refresh du token 1h avant expiration (~24h)
   const msUntilExpiry = expirationTime - Date.now();
@@ -171,8 +167,7 @@ const createSharedWebSocket = async () => {
     console.log("WebSocket partagé fermé. Reconnexion dans 5s...");
     if (sharedRefreshTimer) { clearTimeout(sharedRefreshTimer); sharedRefreshTimer = null; }
     if (sharedWatchdogTimer) { clearInterval(sharedWatchdogTimer); sharedWatchdogTimer = null; }
-    if (sharedKeepAliveTimer) { clearInterval(sharedKeepAliveTimer); sharedKeepAliveTimer = null; }
-    sharedWs = null;
+      sharedWs = null;
     setTimeout(createSharedWebSocket, 5000);
   });
 };

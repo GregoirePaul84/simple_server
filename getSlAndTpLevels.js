@@ -81,8 +81,13 @@ function getSlAndTpLevels(type) {
       tp = 5.4;
       break;
 
+    case "DOGE_LONG_RANGE":
+      sl = 2.0;
+      tp = 3.5;
+      break;
+
     case "DOGE_SHORT_CROSSUNDER":
-      sl = 3.8;
+      sl = 4.5;
       tp = 4.8;
       break;
 
