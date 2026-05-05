@@ -80,8 +80,11 @@ const createSharedWebSocket = async () => {
 
 
   // Refresh du token 1h avant expiration (~24h)
-  const msUntilExpiry = expirationTime - Date.now();
-  const refreshDelay = Math.max(msUntilExpiry - 60 * 60 * 1000, 5000);
+  // expirationTime peut être en secondes ou ms selon l'API — on normalise en ms
+  const expirationMs = expirationTime > 1e12 ? expirationTime : expirationTime * 1000;
+  const msUntilExpiry = expirationMs - Date.now();
+  const refreshDelay = Math.max(msUntilExpiry - 60 * 60 * 1000, 60 * 1000);
+  console.log(`Token expire dans ${Math.round(msUntilExpiry / 60000)} min, refresh dans ${Math.round(refreshDelay / 60000)} min`);
   sharedRefreshTimer = setTimeout(() => {
     console.log("🔄 Token expiré, reconnexion WebSocket partagé...");
     try { ws.terminate(); } catch {}
