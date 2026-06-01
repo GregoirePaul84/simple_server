@@ -30,12 +30,13 @@ async function isolatedMarginLoanRaw({ asset, amount, symbol, apiKey, apiSecret 
   } catch (err) {
     const data = err?.response?.data;
     const status = err?.response?.status;
-    const msg = err?.message;
     console.error('Erreur HTTP status:', status);
     console.error('Erreur payload:', data);
-    console.error('Erreur message:', msg);
-    console.error("Erreur Binance complète :", JSON.stringify(err?.response?.data, null, 2));
-    throw data || { code: 'UNKNOWN', msg: msg || 'Unknown error' };
+    console.error('Erreur message:', err?.message);
+    console.error("Erreur Binance complète :", JSON.stringify(data, null, 2));
+    const error = new Error(data?.msg || err?.message || 'Unknown Binance error');
+    error.code = data?.code;
+    throw error;
   }
 }
 

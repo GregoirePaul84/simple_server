@@ -2,6 +2,7 @@ require('dotenv').config();
 const { getDecimalPlaces } = require("../getDecimalPlaces");
 const { getSlAndTpLevels } = require("../getSlAndTpLevels");
 const { isolatedMarginLoanRaw } = require('../isolatedMarginLoanRaw');
+const { getMaxBorrowable } = require('../getMaxBorrowable');
 
 const takeShortPosition = async (
     binance,
@@ -49,13 +50,7 @@ const takeShortPosition = async (
     // 🔐 3. Vérification du max borrow réel
     // -------------------------------
 
-    const borrowInfo = await binance.marginMaxBorrow({
-        asset,
-        isolatedSymbol: symbol,
-        isIsolated: 'TRUE'
-    });
-
-    const maxBorrowable = parseFloat(borrowInfo.amount);
+    const maxBorrowable = await getMaxBorrowable(asset, symbol);
 
     console.log(`📊 Max empruntable selon Binance : ${maxBorrowable}`);
 
