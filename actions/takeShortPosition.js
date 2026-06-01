@@ -1,7 +1,6 @@
 require('dotenv').config();
 const { getDecimalPlaces } = require("../getDecimalPlaces");
 const { getSlAndTpLevels } = require("../getSlAndTpLevels");
-const { isolatedMarginLoanRaw } = require('../isolatedMarginLoanRaw');
 const { getMaxBorrowable } = require('../getMaxBorrowable');
 
 const takeShortPosition = async (
@@ -79,12 +78,11 @@ const takeShortPosition = async (
     try {
         console.log(`💼 Emprunt de ${qty} ${asset}...`);
 
-        const borrowResult = await isolatedMarginLoanRaw({
+        const borrowResult = await binance.marginLoan({
             asset,
-            amount: qty.toString(),
-            symbol,
-            apiKey: process.env.BINANCE_MARGIN_API_KEY,
-            apiSecret: process.env.BINANCE_MARGIN_API_SECRET
+            amount: qty,
+            isIsolated: 'TRUE',
+            symbol
         });
 
         console.log('➡️ Emprunt OK :', borrowResult);
