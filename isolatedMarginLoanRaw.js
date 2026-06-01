@@ -2,8 +2,8 @@ const axios = require('axios');
 const crypto = require('crypto');
 
 async function isolatedMarginLoanRaw({ asset, amount, symbol, apiKey, apiSecret }) {
-  console.log('Début de l\'emprunt...');
-  
+  console.log(`Début de l'emprunt: asset=${asset}, amount=${amount}, symbol=${symbol}`);
+
   const baseUrl = 'https://api.binance.com';
   const path = '/sapi/v1/margin/loan';
   const timestamp = Date.now();

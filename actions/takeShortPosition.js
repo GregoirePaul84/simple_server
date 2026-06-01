@@ -53,9 +53,10 @@ const takeShortPosition = async (
     const maxBorrowable = await getMaxBorrowable(asset, symbol);
 
     console.log(`📊 Max empruntable selon Binance : ${maxBorrowable}`);
+    console.log(`🔍 Debug: qty=${qty}, maxBorrowable=${maxBorrowable}, qtyEstSupérieur=${qty > maxBorrowable}`);
 
-    if (maxBorrowable <= 0) {
-        throw new Error(`Montant empruntable nul pour ${symbol}.`);
+    if (!isFinite(maxBorrowable) || maxBorrowable <= 0) {
+        throw new Error(`Montant empruntable invalide pour ${symbol}: ${maxBorrowable}`);
     }
 
     // Limitation stricte
@@ -89,8 +90,8 @@ const takeShortPosition = async (
         console.log('➡️ Emprunt OK :', borrowResult);
 
     } catch (err) {
-        const msg = err.response?.data?.msg || err.message;
-        const code = err.response?.data?.code;
+        const msg = err.message;
+        const code = err.code;
         console.error(`❌ Erreur emprunt : ${msg} (code ${code})`);
         throw err;
     }
