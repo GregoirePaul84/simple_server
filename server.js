@@ -71,7 +71,7 @@ const createSharedWebSocket = async () => {
   if (sharedWatchdogTimer) { clearInterval(sharedWatchdogTimer); sharedWatchdogTimer = null; }
 
   const { token, expirationTime } = await getIsolatedMarginListenToken();
-  const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${token}`);
+  const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${encodeURIComponent(token)}`);
   sharedWs = ws;
 
   ws.on("open", () => {

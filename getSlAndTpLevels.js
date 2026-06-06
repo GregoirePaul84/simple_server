@@ -57,8 +57,8 @@ function getSlAndTpLevels(type) {
       break;
 
     case "DOGE_SHORT_SMALL_ZONE":
-      sl = 3.5;
-      tp = 4.5;
+      sl = 3.6;
+      tp = 3.8;
       break;
 
     case "DOGE_SHORT_DEAD_ZONE":
