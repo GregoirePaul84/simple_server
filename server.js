@@ -13,7 +13,7 @@ const { scheduleMonthlyReport, sendMonthlyReport } = require("./monthlyReport");
 const { handleCloseLong } = require("./actions/handleCloseLong");
 const { handleCloseShort } = require("./actions/handleCloseShort");
 const WebSocket = require("ws");
-const { getIsolatedMarginListenToken } = require("./websocket");
+const { getIsolatedListenKey, keepAliveListenKey } = require("./websocket");
 const { getPositionStatus } = require("./getPositionStatus");
 
 // Configuration de Telegram
@@ -53,42 +53,46 @@ const profits = {
 
 const symbols = ["BTCUSDC", "DOGEUSDC"];
 
-// Un seul WS partagé — le token global Binance couvre tous les symboles
-let sharedWs = null;
-let sharedRefreshTimer = null;
-let sharedWatchdogTimer = null;
+// État par symbole pour les WebSockets
+const wsState = {};
 
 // Lock anti double traitement, un par symbole
 const orderHandled = new Map(symbols.map((s) => [s, false]));
 
-const createSharedWebSocket = async () => {
-  // Nettoyage si on relance
-  if (sharedWs) {
-    try { sharedWs.terminate(); } catch {}
-    sharedWs = null;
-  }
-  if (sharedRefreshTimer) { clearTimeout(sharedRefreshTimer); sharedRefreshTimer = null; }
-  if (sharedWatchdogTimer) { clearInterval(sharedWatchdogTimer); sharedWatchdogTimer = null; }
+const createSymbolWebSocket = async (symbol) => {
+  const state = wsState[symbol] || {};
+  wsState[symbol] = state;
 
-  const { token, expirationTime } = await getIsolatedMarginListenToken();
-  const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${encodeURIComponent(token)}`);
-  sharedWs = ws;
+  // Nettoyage si on relance
+  if (state.ws) { try { state.ws.terminate(); } catch {} state.ws = null; }
+  if (state.keepAliveTimer) { clearInterval(state.keepAliveTimer); state.keepAliveTimer = null; }
+  if (state.watchdogTimer) { clearInterval(state.watchdogTimer); state.watchdogTimer = null; }
+
+  let listenKey;
+  try {
+    listenKey = await getIsolatedListenKey(symbol);
+  } catch (err) {
+    console.error(`Erreur listenKey ${symbol} :`, err.message);
+    setTimeout(() => createSymbolWebSocket(symbol), 10000);
+    return;
+  }
+
+  state.listenKey = listenKey;
+  const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${listenKey}`);
+  state.ws = ws;
 
   ws.on("open", () => {
-    console.log("WebSocket partagé connecté (BTCUSDC + DOGEUSDC).");
+    console.log(`WebSocket ${symbol} connecté.`);
   });
 
-
-  // Refresh du token 1h avant expiration (~24h)
-  // expirationTime peut être en secondes ou ms selon l'API — on normalise en ms
-  const expirationMs = expirationTime > 1e12 ? expirationTime : expirationTime * 1000;
-  const msUntilExpiry = expirationMs - Date.now();
-  const refreshDelay = Math.max(msUntilExpiry - 60 * 60 * 1000, 60 * 1000);
-  console.log(`Token expire dans ${Math.round(msUntilExpiry / 60000)} min, refresh dans ${Math.round(refreshDelay / 60000)} min`);
-  sharedRefreshTimer = setTimeout(() => {
-    console.log("🔄 Token expiré, reconnexion WebSocket partagé...");
-    try { ws.terminate(); } catch {}
-  }, refreshDelay);
+  // Keep-alive toutes les 30 min (Binance expire le stream après 60 min sans keepalive)
+  state.keepAliveTimer = setInterval(async () => {
+    try {
+      await keepAliveListenKey(symbol, state.listenKey);
+    } catch (err) {
+      console.error(`Erreur keep-alive ${symbol} :`, err.message);
+    }
+  }, 30 * 60 * 1000);
 
   // Watchdog : détecte les déconnexions silencieuses via les pings Binance (~3min)
   let lastPingAt = Date.now();
@@ -98,11 +102,11 @@ const createSharedWebSocket = async () => {
     ws.pong();
   });
 
-  sharedWatchdogTimer = setInterval(() => {
+  state.watchdogTimer = setInterval(() => {
     if (Date.now() - lastPingAt > 5 * 60 * 1000) {
-      console.warn("⚠️ Aucun ping reçu depuis 5min, reconnexion WebSocket partagé forcée");
-      clearInterval(sharedWatchdogTimer);
-      sharedWatchdogTimer = null;
+      console.warn(`⚠️ Aucun ping reçu depuis 5min pour ${symbol}, reconnexion forcée`);
+      clearInterval(state.watchdogTimer);
+      state.watchdogTimer = null;
       ws.terminate();
     }
   }, 60 * 1000);
@@ -112,11 +116,9 @@ const createSharedWebSocket = async () => {
     const event = message.data || message;
 
     if (event.e !== "executionReport") return;
-    if (!symbols.includes(event.s)) return;
     if (event.X !== "FILLED") return;
     if (!["STOP_LOSS_LIMIT", "LIMIT_MAKER"].includes(event.o)) return;
 
-    const symbol = event.s;
     console.log(`Message WebSocket reçu pour ${symbol}:`, event);
 
     if (orderHandled.get(symbol)) {
@@ -163,20 +165,22 @@ const createSharedWebSocket = async () => {
   });
 
   ws.on("error", (err) => {
-    console.error("Erreur WebSocket partagé :", err);
+    console.error(`Erreur WebSocket ${symbol} :`, err);
   });
 
   ws.on("close", () => {
-    console.log("WebSocket partagé fermé. Reconnexion dans 5s...");
-    if (sharedRefreshTimer) { clearTimeout(sharedRefreshTimer); sharedRefreshTimer = null; }
-    if (sharedWatchdogTimer) { clearInterval(sharedWatchdogTimer); sharedWatchdogTimer = null; }
-      sharedWs = null;
-    setTimeout(createSharedWebSocket, 5000);
+    console.log(`WebSocket ${symbol} fermé. Reconnexion dans 5s...`);
+    if (state.keepAliveTimer) { clearInterval(state.keepAliveTimer); state.keepAliveTimer = null; }
+    if (state.watchdogTimer) { clearInterval(state.watchdogTimer); state.watchdogTimer = null; }
+    state.ws = null;
+    setTimeout(() => createSymbolWebSocket(symbol), 5000);
   });
 };
 
 const startUserWebSocket = async () => {
-  await createSharedWebSocket();
+  for (const symbol of symbols) {
+    await createSymbolWebSocket(symbol);
+  }
 };
 
 // Setter pour réinitialiser les profits mensuels
