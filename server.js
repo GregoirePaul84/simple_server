@@ -61,6 +61,9 @@ let sharedPingTimer = null;
 // Lock anti double traitement, un par symbole
 const orderHandled = new Map(symbols.map((s) => [s, false]));
 
+// Lock anti double webhook, un par symbole
+const webhookProcessing = new Map(symbols.map((s) => [s, false]));
+
 const createSharedWebSocket = async () => {
   // Nettoyage si on relance
   if (sharedWs) { try { sharedWs.terminate(); } catch {} sharedWs = null; }
@@ -108,10 +111,18 @@ const createSharedWebSocket = async () => {
     const message = JSON.parse(data);
     const event = message.data || message;
 
+    // Diagnostic : log tout ce qui arrive (sauf les pings/pong silencieux)
+    if (event.e) {
+      console.log(`[WS] event=${event.e} symbol=${event.s} status=${event.X} orderType=${event.o} side=${event.S}`);
+    }
+
     if (event.e !== "executionReport") return;
     if (!symbols.includes(event.s)) return;
     if (event.X !== "FILLED") return;
-    if (!["STOP_LOSS_LIMIT", "LIMIT_MAKER"].includes(event.o)) return;
+    if (!["STOP_LOSS_LIMIT", "LIMIT_MAKER", "LIMIT"].includes(event.o)) {
+      console.warn(`[WS] Ordre ignoré - type non reconnu: ${event.o}`);
+      return;
+    }
 
     const symbol = event.s;
     console.log(`Message WebSocket reçu pour ${symbol}:`, event);
@@ -276,6 +287,14 @@ app.post("/webhook", async (req, res) => {
     return res.status(401).send("Clé secrète incorrecte.");
   }
 
+  if (webhookProcessing.get(symbol)) {
+    console.warn(`⛔ Webhook ignoré : traitement déjà en cours pour ${symbol}`);
+    await bot.sendMessage(chatId, `⚠️ Webhook dupliqué ignoré pour ${symbol} (traitement en cours).`);
+    return res.status(200).send("Webhook dupliqué ignoré.");
+  }
+
+  webhookProcessing.set(symbol, true);
+
   try {
     console.log("début du webhook");
 
@@ -428,7 +447,8 @@ app.post("/webhook", async (req, res) => {
       message: "Erreur lors de l'exécution de l'ordre.",
       error: error.message,
     });
-    return { order: null, initialPrice: null };
+  } finally {
+    webhookProcessing.set(symbol, false);
   }
 });
 
