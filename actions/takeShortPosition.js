@@ -2,6 +2,7 @@ require('dotenv').config();
 const { getDecimalPlaces } = require("../getDecimalPlaces");
 const { getSlAndTpLevels } = require("../getSlAndTpLevels");
 const { rawBorrowRepay } = require('../rawBorrowRepay');
+const { getIsolatedMarginAccount } = require('../getIsolatedMarginAccount');
 
 const takeShortPosition = async (
     binance,
@@ -29,9 +30,30 @@ const takeShortPosition = async (
 
     const asset = symbol.replace('USDC', '');
 
-    // 2. Calcul de la quantité à shorter
+    // 2. Calcul de la quantité max empruntable (contrainte compte global)
+    //
+    // Binance vérifie : totalNetAssetOfBtc / (totalLiabilityOfBtc + X) >= ML_min
+    // ML_min est ~1.05 en pratique. On vise 1.2 pour avoir une marge de sécurité.
+    // getMaxBorrowable ne tient pas compte de cette contrainte globale.
+    const accountData = await getIsolatedMarginAccount(
+        process.env.BINANCE_MARGIN_API_KEY,
+        process.env.BINANCE_MARGIN_API_SECRET
+    );
+    const totalNetBtc  = parseFloat(accountData.totalNetAssetOfBtc);
+    const totalLiabBtc = parseFloat(accountData.totalLiabilityOfBtc);
+    const targetML = 1.2;
+    const maxBorrowBtc = totalNetBtc / targetML - totalLiabBtc;
+
+    console.log(`📊 Compte global : netBtc=${totalNetBtc}, liabBtc=${totalLiabBtc}`);
+    console.log(`📊 Max empruntable (ML cible ${targetML}) : ${maxBorrowBtc.toFixed(5)} BTC`);
+
+    if (maxBorrowBtc <= 0) {
+        throw new Error(`Capacité d'emprunt insuffisante (ML compte trop bas). Clôturer DOGEUSDC d'abord.`);
+    }
+
     const feeRate = 0.001;
     let qty = (usdcBalance / price) * (1 - feeRate);
+    qty = Math.min(qty, maxBorrowBtc * 0.99); // 1% buffer sous la limite
     qty = Math.floor(qty / stepSize) * stepSize;
     qty = parseFloat(qty.toFixed(decimals));
 
@@ -39,9 +61,10 @@ const takeShortPosition = async (
         throw new Error(`Quantité trop faible : ${qty}`);
     }
 
-    console.log(`🔢 Quantité à shorter : ${qty} ${asset}`);
+    const mlAfter = totalNetBtc / (totalLiabBtc + qty);
+    console.log(`🔢 Quantité à shorter : ${qty} ${asset} (ML compte après borrow : ${mlAfter.toFixed(3)})`);
 
-    // 3. Emprunt via le nouvel endpoint /sapi/v1/margin/borrow-repay
+    // 3. Emprunt
     try {
         await rawBorrowRepay({
             asset,
@@ -53,7 +76,7 @@ const takeShortPosition = async (
         });
         console.log(`✅ Emprunt de ${qty} ${asset} OK`);
     } catch (err) {
-        console.error(`❌ Erreur emprunt (borrow-repay) :`, err.message, '(code', err.code, ')');
+        console.error(`❌ Erreur emprunt :`, err.message, '(code', err.code, ')');
         throw err;
     }
 
@@ -61,7 +84,6 @@ const takeShortPosition = async (
     let order;
     try {
         console.log(`📤 Vente à découvert de ${qty} ${asset}...`);
-
         order = await binance.marginOrder({
             symbol,
             side: 'SELL',
@@ -69,12 +91,9 @@ const takeShortPosition = async (
             quantity: qty,
             isIsolated: 'TRUE'
         });
-
         console.log('📈 Short ouvert :', order);
-
     } catch (error) {
-        console.error('❌ Erreur lors de la vente :', error.message, '(code', error.code, ')');
-        // Remboursement si la vente échoue
+        console.error('❌ Erreur lors de la vente :', error.message);
         await rawBorrowRepay({
             asset, symbol, amount: qty, type: 'REPAY',
             apiKey: process.env.BINANCE_MARGIN_API_KEY,
