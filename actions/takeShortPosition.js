@@ -37,7 +37,10 @@ const takeShortPosition = async (
     // 🧮 2. Calcul de la quantité à vendre
     // -------------------------------
     const feeRate = 0.001;
-    let qty = (usdcBalance / price) * (1 - feeRate); // provision fees
+    // 0.9 safety factor: keeps ML ~2.11 instead of ~2.001, avoiding -11007 when price
+    // moves between webhook price fetch and the actual borrow call.
+    const leverageFactor = 0.9;
+    let qty = (usdcBalance * leverageFactor / price) * (1 - feeRate);
     qty = Math.floor(qty / stepSize) * stepSize;
     qty = parseFloat(qty.toFixed(decimals));
 
