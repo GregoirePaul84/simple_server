@@ -21,9 +21,11 @@ async function getMaxBorrowable(asset, isolatedSymbol) {
     const res = await axios.get(url, { headers: { 'X-MBX-APIKEY': process.env.BINANCE_MARGIN_API_KEY }});
     console.log('réponse axios =>', res);
     
-    console.log('getMaxBorrowable success =>', parseFloat(res.data.amount));
-    
-    return parseFloat(res.data.amount);
+    const amount = parseFloat(res.data.amount);
+    const borrowLimit = parseFloat(res.data.borrowLimit);
+    console.log('getMaxBorrowable success => amount:', amount, '| borrowLimit:', borrowLimit);
+
+    return Math.min(amount, borrowLimit);
 }
 
 module.exports = { getMaxBorrowable };
