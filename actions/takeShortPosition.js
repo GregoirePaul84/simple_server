@@ -3,6 +3,7 @@ const { getDecimalPlaces } = require("../getDecimalPlaces");
 const { getSlAndTpLevels } = require("../getSlAndTpLevels");
 const { getMaxBorrowable } = require('../getMaxBorrowable');
 const { isolatedMarginLoanRaw } = require('../isolatedMarginLoanRaw');
+const { getIsolatedMarginAccount } = require('../getIsolatedMarginAccount');
 
 const takeShortPosition = async (
     binance,
@@ -72,6 +73,20 @@ const takeShortPosition = async (
     }
 
     console.log(`📉 Quantité finale à emprunter : ${qty} ${asset}`);
+
+    // -------------------------------
+    // 🔍 3b. Diagnostic état de la paire avant emprunt
+    // -------------------------------
+    const marginAccount = await getIsolatedMarginAccount(
+        process.env.BINANCE_MARGIN_API_KEY,
+        process.env.BINANCE_MARGIN_API_SECRET
+    );
+    const pair = marginAccount.assets.find(a => a.symbol === symbol);
+    if (pair) {
+        console.log(`🔍 État BTCUSDC baseAsset:`, JSON.stringify(pair.baseAsset));
+        console.log(`🔍 État BTCUSDC quoteAsset:`, JSON.stringify(pair.quoteAsset));
+        console.log(`🔍 marginLevel: ${pair.marginLevel}, marginLevelStatus: ${pair.marginLevelStatus}`);
+    }
 
     // -------------------------------
     // 🏦 4. Emprunt de l'actif
