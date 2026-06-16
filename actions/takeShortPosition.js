@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { getDecimalPlaces } = require("../getDecimalPlaces");
 const { getSlAndTpLevels } = require("../getSlAndTpLevels");
+const { rawBorrowRepay } = require('../rawBorrowRepay');
 
 const takeShortPosition = async (
     binance,
@@ -40,30 +41,49 @@ const takeShortPosition = async (
 
     console.log(`🔢 Quantité à shorter : ${qty} ${asset}`);
 
-    // 3. Vente à découvert avec emprunt automatique
-    // sideEffectType: 'MARGIN_BUY' demande à Binance d'emprunter l'actif automatiquement
-    // avant la vente, en évitant l'appel explicite à /margin/loan qui retourne -11007.
+    // 3. Emprunt via le nouvel endpoint /sapi/v1/margin/borrow-repay
+    try {
+        await rawBorrowRepay({
+            asset,
+            symbol,
+            amount: qty,
+            type: 'BORROW',
+            apiKey: process.env.BINANCE_MARGIN_API_KEY,
+            apiSecret: process.env.BINANCE_MARGIN_API_SECRET
+        });
+        console.log(`✅ Emprunt de ${qty} ${asset} OK`);
+    } catch (err) {
+        console.error(`❌ Erreur emprunt (borrow-repay) :`, err.message, '(code', err.code, ')');
+        throw err;
+    }
+
+    // 4. Vente de l'actif emprunté
     let order;
     try {
-        console.log(`📤 Vente à découvert avec auto-borrow de ${qty} ${asset}...`);
+        console.log(`📤 Vente à découvert de ${qty} ${asset}...`);
 
         order = await binance.marginOrder({
             symbol,
             side: 'SELL',
             type: 'MARKET',
             quantity: qty,
-            isIsolated: 'TRUE',
-            sideEffectType: 'MARGIN_BUY'
+            isIsolated: 'TRUE'
         });
 
         console.log('📈 Short ouvert :', order);
 
     } catch (error) {
-        console.error('❌ Erreur lors de la vente à découvert :', error.message, '(code', error.code, ')');
+        console.error('❌ Erreur lors de la vente :', error.message, '(code', error.code, ')');
+        // Remboursement si la vente échoue
+        await rawBorrowRepay({
+            asset, symbol, amount: qty, type: 'REPAY',
+            apiKey: process.env.BINANCE_MARGIN_API_KEY,
+            apiSecret: process.env.BINANCE_MARGIN_API_SECRET
+        }).catch(e => console.error('Repay auto échoué:', e.message));
         throw error;
     }
 
-    // 4. SL / TP + Telegram
+    // 5. SL / TP + Telegram
     const slTp = getSlAndTpLevels(type);
     const entry = parseFloat(order.fills?.[0]?.price) || price;
 
