@@ -13,7 +13,7 @@ const { scheduleMonthlyReport, sendMonthlyReport } = require("./monthlyReport");
 const { handleCloseLong } = require("./actions/handleCloseLong");
 const { handleCloseShort } = require("./actions/handleCloseShort");
 const WebSocket = require("ws");
-const { getIsolatedMarginListenToken } = require("./websocket");
+const { getListenToken } = require("./websocket");
 const { getPositionStatus } = require("./getPositionStatus");
 
 // Configuration de Telegram
@@ -53,7 +53,9 @@ const profits = {
 
 const symbols = ["BTCUSDC", "DOGEUSDC"];
 
-// Un seul WS partagé — le token global Binance couvre tous les symboles
+// WebSocket API Binance (nouveau endpoint depuis dépréciation de /userDataStream/isolated en fév. 2026)
+const WS_API_URL = "wss://ws-api.binance.com:443/ws-api/v3";
+
 let sharedWs = null;
 let sharedRefreshTimer = null;
 let sharedPingTimer = null;
@@ -70,28 +72,35 @@ const createSharedWebSocket = async () => {
   if (sharedRefreshTimer) { clearTimeout(sharedRefreshTimer); sharedRefreshTimer = null; }
   if (sharedPingTimer) { clearInterval(sharedPingTimer); sharedPingTimer = null; }
 
-  const { token, expirationTime } = await getIsolatedMarginListenToken();
+  const { token, expirationTime } = await getListenToken();
 
-  // Token base64 avec '/' → ne pas encoder, Binance gère le chemin multi-segments
-  const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${token}`);
+  const ws = new WebSocket(WS_API_URL);
   sharedWs = ws;
 
   ws.on("open", () => {
-    console.log("WebSocket partagé connecté (BTCUSDC + DOGEUSDC).");
+    console.log("WebSocket API Binance connecté.");
+
+    // Souscription au flux user data avec le listenToken
+    ws.send(JSON.stringify({
+      id: Date.now().toString(),
+      method: "userDataStream.subscribe.listenToken",
+      params: { listenToken: token }
+    }));
+    console.log("[WS] Souscription envoyée avec listenToken");
+
+    // Renouvellement du token 1h avant expiration (token valide 24h)
+    const expirationMs = expirationTime > 1e12 ? expirationTime : expirationTime * 1000;
+    const msUntilExpiry = expirationMs - Date.now();
+    const refreshDelay = Math.max(msUntilExpiry - 60 * 60 * 1000, 60 * 1000);
+    console.log(`Token expire dans ${Math.round(msUntilExpiry / 60000)} min, reconnexion dans ${Math.round(refreshDelay / 60000)} min`);
+
+    sharedRefreshTimer = setTimeout(() => {
+      console.log("🔄 Token expirant, reconnexion WebSocket...");
+      try { ws.terminate(); } catch {}
+    }, refreshDelay);
   });
 
-  // Refresh du token 1h avant expiration (~24h)
-  const expirationMs = expirationTime > 1e12 ? expirationTime : expirationTime * 1000;
-  const msUntilExpiry = expirationMs - Date.now();
-  const refreshDelay = Math.max(msUntilExpiry - 60 * 60 * 1000, 60 * 1000);
-  console.log(`Token expire dans ${Math.round(msUntilExpiry / 60000)} min, refresh dans ${Math.round(refreshDelay / 60000)} min`);
-  sharedRefreshTimer = setTimeout(() => {
-    console.log("🔄 Token expiré, reconnexion WebSocket partagé...");
-    try { ws.terminate(); } catch {}
-  }, refreshDelay);
-
-  // Liveness check : le client envoie un ping toutes les 3 min, Binance doit répondre pong
-  // Fiable indépendamment du comportement de Binance (protocole WebSocket garanti)
+  // Liveness check : ping toutes les 3 min
   ws.isAlive = true;
   ws.on("pong", () => { ws.isAlive = true; });
 
@@ -111,9 +120,23 @@ const createSharedWebSocket = async () => {
     const message = JSON.parse(data);
     const event = message.data || message;
 
-    // Diagnostic : log tout ce qui arrive (sauf les pings/pong silencieux)
+    // Réponse de souscription (status 200) — rien à faire
+    if (message.id && message.status) {
+      if (message.status !== 200) console.error("[WS] Souscription échouée :", message);
+      else console.log("[WS] Souscription confirmée par Binance");
+      return;
+    }
+
+    // Diagnostic : log tout ce qui arrive
     if (event.e) {
       console.log(`[WS] event=${event.e} symbol=${event.s} status=${event.X} orderType=${event.o} side=${event.S}`);
+    }
+
+    // Token expiré sans renouvellement — forcer reconnexion
+    if (event.e === "eventStreamTerminated") {
+      console.warn("[WS] eventStreamTerminated reçu, reconnexion forcée...");
+      try { ws.terminate(); } catch {}
+      return;
     }
 
     if (event.e !== "executionReport") return;
@@ -185,6 +208,14 @@ const createSharedWebSocket = async () => {
 
 const startUserWebSocket = async () => {
   await createSharedWebSocket();
+
+  // Notification Telegram toutes les 12h pour confirmer que le WebSocket est actif
+  setInterval(() => {
+    const isAlive = sharedWs && sharedWs.readyState === WebSocket.OPEN;
+    const status = isAlive ? "✅ WebSocket Binance actif" : "⚠️ WebSocket Binance inactif (reconnexion en cours...)";
+    const now = new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" });
+    bot.sendMessage(chatId, `${status}\n🕐 ${now}`);
+  }, 12 * 60 * 60 * 1000);
 };
 
 // Setter pour réinitialiser les profits mensuels

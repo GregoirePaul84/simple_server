@@ -2,7 +2,7 @@ require('dotenv').config();
 const { getDecimalPlaces } = require("../getDecimalPlaces");
 const { getSlAndTpLevels } = require("../getSlAndTpLevels");
 const { rawBorrowRepay } = require('../rawBorrowRepay');
-const { getIsolatedMarginAccount } = require('../getIsolatedMarginAccount');
+const { getMaxBorrowable } = require('../getMaxBorrowable');
 
 const takeShortPosition = async (
     binance,
@@ -30,30 +30,17 @@ const takeShortPosition = async (
 
     const asset = symbol.replace('USDC', '');
 
-    // 2. Calcul de la quantité max empruntable (contrainte compte global)
-    //
-    // Binance vérifie : totalNetAssetOfBtc / (totalLiabilityOfBtc + X) >= ML_min
-    // ML_min est ~1.05 en pratique. On vise 1.2 pour avoir une marge de sécurité.
-    // getMaxBorrowable ne tient pas compte de cette contrainte globale.
-    const accountData = await getIsolatedMarginAccount(
-        process.env.BINANCE_MARGIN_API_KEY,
-        process.env.BINANCE_MARGIN_API_SECRET
-    );
-    const totalNetBtc  = parseFloat(accountData.totalNetAssetOfBtc);
-    const totalLiabBtc = parseFloat(accountData.totalLiabilityOfBtc);
-    const targetML = 1.2;
-    const maxBorrowBtc = totalNetBtc / targetML - totalLiabBtc;
+    // 2. Quantité max empruntable via l'endpoint officiel Binance (par paire isolée)
+    const maxBorrowable = await getMaxBorrowable(asset, symbol);
+    console.log(`📊 Max empruntable Binance pour ${asset} sur ${symbol} : ${maxBorrowable}`);
 
-    console.log(`📊 Compte global : netBtc=${totalNetBtc}, liabBtc=${totalLiabBtc}`);
-    console.log(`📊 Max empruntable (ML cible ${targetML}) : ${maxBorrowBtc.toFixed(5)} BTC`);
-
-    if (maxBorrowBtc <= 0) {
-        throw new Error(`Capacité d'emprunt insuffisante (ML compte trop bas). Clôturer DOGEUSDC d'abord.`);
+    if (maxBorrowable <= 0) {
+        throw new Error(`Capacité d'emprunt nulle selon Binance pour ${asset} sur ${symbol}.`);
     }
 
     const feeRate = 0.001;
     let qty = (usdcBalance / price) * (1 - feeRate);
-    qty = Math.min(qty, maxBorrowBtc * 0.99); // 1% buffer sous la limite
+    qty = Math.min(qty, maxBorrowable * 0.98); // 2% buffer de sécurité
     qty = Math.floor(qty / stepSize) * stepSize;
     qty = parseFloat(qty.toFixed(decimals));
 
@@ -61,8 +48,7 @@ const takeShortPosition = async (
         throw new Error(`Quantité trop faible : ${qty}`);
     }
 
-    const mlAfter = totalNetBtc / (totalLiabBtc + qty);
-    console.log(`🔢 Quantité à shorter : ${qty} ${asset} (ML compte après borrow : ${mlAfter.toFixed(3)})`);
+    console.log(`🔢 Quantité à shorter : ${qty} ${asset}`);
 
     // 3. Emprunt
     try {
