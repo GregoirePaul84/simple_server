@@ -53,8 +53,9 @@ const profits = {
 
 const symbols = ["BTCUSDC", "DOGEUSDC"];
 
-// WebSocket API Binance (nouveau endpoint depuis dépréciation de /userDataStream/isolated en fév. 2026)
-const WS_API_URL = "wss://ws-api.binance.com:443/ws-api/v3";
+// WebSocket Stream Binance — user data stream (remplace /userDataStream/isolated déprécié en fév. 2026)
+// Le listenKey est intégré dans l'URL, aucun message de souscription n'est nécessaire.
+const WS_STREAM_BASE_URL = "wss://stream.binance.com:9443/ws";
 
 let sharedWs = null;
 let sharedRefreshTimer = null;
@@ -74,19 +75,11 @@ const createSharedWebSocket = async () => {
 
   const { token, expirationTime } = await getListenToken();
 
-  const ws = new WebSocket(WS_API_URL);
+  const ws = new WebSocket(`${WS_STREAM_BASE_URL}/${token}`);
   sharedWs = ws;
 
   ws.on("open", () => {
-    console.log("WebSocket API Binance connecté.");
-
-    // Souscription au flux user data avec le listenToken
-    ws.send(JSON.stringify({
-      id: Date.now().toString(),
-      method: "userDataStream.subscribe.listenToken",
-      params: { listenToken: token }
-    }));
-    console.log("[WS] Souscription envoyée avec listenToken");
+    console.log("[WS] WebSocket Stream Binance connecté (user data stream actif).");
 
     // Renouvellement du token 1h avant expiration (token valide 24h)
     const expirationMs = expirationTime > 1e12 ? expirationTime : expirationTime * 1000;
