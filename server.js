@@ -53,9 +53,9 @@ const profits = {
 
 const symbols = ["BTCUSDC", "DOGEUSDC"];
 
-// WebSocket Stream Binance — user data stream (remplace /userDataStream/isolated déprécié en fév. 2026)
-// Le listenKey est intégré dans l'URL, aucun message de souscription n'est nécessaire.
-const WS_STREAM_BASE_URL = "wss://stream.binance.com:9443/ws";
+// WebSocket API Binance — user data stream via userDataStream.subscribe.listenToken
+// (remplace /userDataStream/isolated déprécié en fév. 2026 ; nécessite un token par symbol isolated)
+const WS_API_URL = "wss://ws-api.binance.com:443/ws-api/v3";
 
 let sharedWs = null;
 let sharedRefreshTimer = null;
@@ -73,16 +73,28 @@ const createSharedWebSocket = async () => {
   if (sharedRefreshTimer) { clearTimeout(sharedRefreshTimer); sharedRefreshTimer = null; }
   if (sharedPingTimer) { clearInterval(sharedPingTimer); sharedPingTimer = null; }
 
-  const { token, expirationTime } = await getListenToken();
+  // Un token par symbol isolated margin (le token sans symbol = cross margin, events non reçus)
+  const tokenResults = await Promise.all(symbols.map(s => getListenToken(s)));
 
-  const ws = new WebSocket(`${WS_STREAM_BASE_URL}/${token}`);
+  const ws = new WebSocket(WS_API_URL);
   sharedWs = ws;
 
   ws.on("open", () => {
-    console.log("[WS] WebSocket Stream Binance connecté (user data stream actif).");
+    console.log("[WS] WebSocket API Binance connecté.");
 
-    // Renouvellement du token 1h avant expiration (token valide 24h)
-    const expirationMs = expirationTime > 1e12 ? expirationTime : expirationTime * 1000;
+    // Souscription aux events de chaque symbol isolated margin
+    tokenResults.forEach(({ token }, i) => {
+      ws.send(JSON.stringify({
+        id: `sub-${symbols[i]}-${Date.now()}`,
+        method: "userDataStream.subscribe.listenToken",
+        params: { listenToken: token }
+      }));
+    });
+    console.log(`[WS] Souscriptions envoyées pour: ${symbols.join(', ')}`);
+
+    // Reconnexion avant expiration du premier token (token valide 24h, reconnexion à 23h)
+    const earliestExpiry = Math.min(...tokenResults.map(t => t.expirationTime));
+    const expirationMs = earliestExpiry > 1e12 ? earliestExpiry : earliestExpiry * 1000;
     const msUntilExpiry = expirationMs - Date.now();
     const refreshDelay = Math.max(msUntilExpiry - 60 * 60 * 1000, 60 * 1000);
     console.log(`Token expire dans ${Math.round(msUntilExpiry / 60000)} min, reconnexion dans ${Math.round(refreshDelay / 60000)} min`);
@@ -110,20 +122,32 @@ const createSharedWebSocket = async () => {
   }, 3 * 60 * 1000);
 
   ws.on("message", async (data) => {
-    const message = JSON.parse(data);
+    const rawStr = data.toString();
+    console.log("[WS RAW]", rawStr.substring(0, 500));
+
+    let message;
+    try {
+      message = JSON.parse(rawStr);
+    } catch {
+      console.warn("[WS] Message non-JSON reçu:", rawStr.substring(0, 200));
+      return;
+    }
     const event = message.data || message;
 
-    // Réponse de souscription (status 200) — rien à faire
-    if (message.id && message.status) {
+    // Réponse de souscription (status 200) — confirme que Binance a bien enregistré la souscription
+    if (message.id && message.status !== undefined) {
       if (message.status !== 200) console.error("[WS] Souscription échouée :", message);
-      else console.log("[WS] Souscription confirmée par Binance");
+      else console.log("[WS] Souscription confirmée par Binance (id:", message.id, ")");
+      return;
+    }
+
+    if (!event.e) {
+      console.log("[WS] Message sans event type:", JSON.stringify(message).substring(0, 300));
       return;
     }
 
     // Diagnostic : log tout ce qui arrive
-    if (event.e) {
-      console.log(`[WS] event=${event.e} symbol=${event.s} status=${event.X} orderType=${event.o} side=${event.S}`);
-    }
+    console.log(`[WS] event=${event.e} symbol=${event.s} status=${event.X} orderType=${event.o} side=${event.S}`);
 
     // Token expiré sans renouvellement — forcer reconnexion
     if (event.e === "eventStreamTerminated") {
