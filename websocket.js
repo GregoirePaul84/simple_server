@@ -15,6 +15,7 @@ function createOkxWebSocket({ symbols, onOrderFill, bot, chatId }) {
         apiKey:    process.env.OKX_API_KEY,
         apiSecret: process.env.OKX_API_SECRET,
         apiPass:   process.env.OKX_PASSPHRASE,
+        market:    'EEA',  // wss://wseea.okx.com:8443/ws/v5/private
     });
 
     // Souscription canal privé 'orders' pour chaque symbol SWAP
