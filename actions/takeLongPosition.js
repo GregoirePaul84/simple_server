@@ -1,117 +1,89 @@
 const { getDecimalPlaces } = require("../getDecimalPlaces");
 const { getSlAndTpLevels } = require("../getSlAndTpLevels");
+const { getOkxClient } = require("../okxClient");
 
-// Fonction pour gérer un achat (position longue)
-const takeLongPosition = async(
-    binance, 
-    symbol, 
-    type,
-    price, 
-    usdcBalance, 
-    bot,
-    chatId
-) => {
-    
+const takeLongPosition = async (symbol, type, price, usdcBalance, bot, chatId) => {
     console.log(`Achat commencé pour ${symbol}`);
-    
-    // Vérification du solde USDC pour un achat
+
     if (usdcBalance <= 0) {
-        console.error('Solde insuffisant en USDC pour acheter.');
         throw new Error('Solde USDC insuffisant.');
     }
-    
+
     console.log(`Balance disponible => ${usdcBalance} USDC`);
-    
-    const exchangeInfo = await binance.exchangeInfo();
-    const symbolInfo = exchangeInfo.symbols.find(s => s.symbol === symbol);
 
-    const lotSizeFilter = symbolInfo.filters.find(f => f.filterType === 'LOT_SIZE');
-    const stepSize = parseFloat(lotSizeFilter.stepSize);
-    const minQty = parseFloat(lotSizeFilter.minQty);
-    const decimalPlaces = getDecimalPlaces(stepSize);
+    const okxClient = getOkxClient();
 
-    // Étape 1 : quantité brute
-    const grossQuantity = usdcBalance / price;
+    // Specs de l'instrument (taille de contrat, lot minimum, tick de prix)
+    const instrRes = await okxClient.getInstruments({ instType: 'SWAP', instId: symbol });
+    const inst = instrRes.data[0];
+    const ctVal  = parseFloat(inst.ctVal);   // ex: 0.01 BTC par contrat
+    const lotSz  = parseFloat(inst.lotSz);   // lot minimum en contrats (ex: 1)
 
-    // Étape 2 : réduction marge
+    // Quantité brute en actif de base, ajustée pour slippage + frais
     const slippage = 0.01;
-    const feeRate = 0.00075;
-    const margin = 1 - feeRate - slippage;
-    let quantityToBuy = grossQuantity * margin;
+    const feeRate  = 0.00075;
+    const baseQty  = (usdcBalance / price) * (1 - feeRate - slippage);
 
-    // Étape 3 : arrondi au stepSize
-    quantityToBuy = Math.floor(quantityToBuy / stepSize) * stepSize;
-    quantityToBuy = parseFloat(quantityToBuy.toFixed(decimalPlaces));
+    // Conversion en contrats, arrondi au lot minimum
+    let contractQty = Math.floor(baseQty / ctVal);
+    contractQty = Math.floor(contractQty / lotSz) * lotSz;
 
-    // Étape 3 : arrondi au stepSize
-    quantityToBuy = Math.floor(quantityToBuy / stepSize) * stepSize;
-    quantityToBuy = parseFloat(quantityToBuy.toFixed(decimalPlaces));
-
-    // Étape 4 : vérification minQty
-    if (quantityToBuy < minQty) {
-        throw new Error(`Quantité trop faible. Minimum requis pour ${symbol} : ${minQty}`);
-    }
-    
-    console.log(`Quantité ajustée : ${quantityToBuy} à ${price} USDC`);    
-
-    // Étape 5 : vérification valeur minimale (minNotional)
-    const notionalFilter = symbolInfo.filters.find(f => f.filterType === 'NOTIONAL');
-    const minNotional = parseFloat(notionalFilter.minNotional);
-
-    const totalOrderValue = quantityToBuy * price;
-
-    console.log(`coût total => ${totalOrderValue} USDC`);
-    
-    if (totalOrderValue < minNotional) {
-        throw new Error(`Valeur de l'ordre trop faible. Minimum requis : ${minNotional} USDC.`);
+    if (contractQty < lotSz) {
+        throw new Error(`Quantité trop faible. Minimum requis pour ${symbol} : ${lotSz} contrat(s)`);
     }
 
-    console.log({
-        usdcBalance,
-        quantityToBuy,
-        stepSize,
-        minQty,
-        totalOrderValue: quantityToBuy * price,
-        minNotional
-      });      
-    
-    // ACHAT
-    const order = await binance.marginOrder({
-        symbol,
-        side: 'BUY',
-        type: 'MARKET',
-        quantity: quantityToBuy,
-        isIsolated: true,
+    const totalOrderValue = contractQty * ctVal * price;
+    console.log(`Quantité : ${contractQty} contrat(s) (~${totalOrderValue.toFixed(2)} USDC)`);
+
+    // Ordre MARKET long en mode isolated, levier x1
+    const orderRes = await okxClient.submitOrder({
+        instId:  symbol,
+        tdMode:  'isolated',
+        side:    'buy',
+        ordType: 'market',
+        sz:      String(contractQty),
     });
 
-    console.log('Prise de position longue.', order);
-    
-    const slAndTpLevels = getSlAndTpLevels(type);
+    if (orderRes.data?.[0]?.sCode !== '0') {
+        throw new Error(`Erreur placeOrder OKX : ${orderRes.data?.[0]?.sMsg || JSON.stringify(orderRes)}`);
+    }
 
-    // Calcul des niveaux de stop-loss et de take-profit
-    const stopLoss = price * (1 - slAndTpLevels.stop_loss / 100); 
-    const takeProfit = price * (1 + slAndTpLevels.take_profit / 100);
-    
-    const potentialGain = (takeProfit - price) * quantityToBuy;
-    const potentialLoss = (price - stopLoss) * quantityToBuy;
-    
-    const initialPrice = parseFloat(order.fills[0]?.price); // Récupère le prix d'exécution
+    const orderId = orderRes.data[0].ordId;
+    console.log('Prise de position longue, orderId :', orderId);
+
+    // Récupère le prix d'exécution moyen
+    const detailRes = await okxClient.getOrderDetails({ instId: symbol, ordId: orderId });
+    const initialPrice = parseFloat(detailRes.data?.[0]?.avgPx) || price;
     console.log(`Prix d'entrée enregistré : ${initialPrice}`);
+
+    const slAndTpLevels = getSlAndTpLevels(type);
+    const stopLoss   = initialPrice * (1 - slAndTpLevels.stop_loss   / 100);
+    const takeProfit = initialPrice * (1 + slAndTpLevels.take_profit / 100);
+
+    const quantityBase  = contractQty * ctVal;
+    const potentialGain = (takeProfit - initialPrice) * quantityBase;
+    const potentialLoss = (initialPrice - stopLoss)   * quantityBase;
+
+    const baseSymbol = symbol.split('-')[0]; // 'BTC' ou 'DOGE'
 
     bot.sendMessage(
         chatId,
-        `✅ Ordre d'achat exécuté :
-        - Symbole : ${symbol}
-        - Prix d'achat: ${price} USDC
-        - Capital investi : ${usdcBalance.toFixed(2)} USDC
-        - Quantité achetée : ${quantityToBuy} ${symbol === 'BTCUSDC' ? 'BTC' : 'DOGE'}
-        - Gain potentiel : +${potentialGain.toFixed(2)} USDC
-        - Perte potentielle : -${potentialLoss.toFixed(2)} USDC
-        `
+        `✅ Ordre d'achat exécuté :\n` +
+        `        - Symbole : ${symbol}\n` +
+        `        - Prix d'achat: ${initialPrice} USDC\n` +
+        `        - Capital investi : ${usdcBalance.toFixed(2)} USDC\n` +
+        `        - Quantité achetée : ${contractQty} contrat(s) (${quantityBase.toFixed(6)} ${baseSymbol})\n` +
+        `        - Gain potentiel : +${potentialGain.toFixed(2)} USDC\n` +
+        `        - Perte potentielle : -${potentialLoss.toFixed(2)} USDC\n`
     );
 
-    return { order, initialPrice };
-}
+    // Retourne le shape attendu par server.js
+    return {
+        order: { executedQty: String(contractQty * ctVal) },
+        initialPrice,
+        contractQty,
+        ctVal,
+    };
+};
 
 module.exports = { takeLongPosition };
-

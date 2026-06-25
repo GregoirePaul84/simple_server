@@ -1,85 +1,81 @@
 const { getDecimalPlaces } = require("../getDecimalPlaces");
 const { getSlAndTpLevels } = require("../getSlAndTpLevels");
+const { getOkxClient } = require("../okxClient");
 
-const placeOCOOrder = async (binance, symbol, type, side, price, assetsAvailable, bot, chatId) => {
+// side param : 'BUY' (on vient d'ouvrir un long) ou 'SELL' (on vient d'ouvrir un short)
+const placeOCOOrder = async (symbol, type, side, price, assetsAvailable, bot, chatId) => {
     try {
-
         console.log(`ordre OCO débuté pour ${symbol}`);
-        
+
         if (assetsAvailable <= 0) {
             throw new Error('Quantité insuffisante pour passer un ordre OCO.');
         }
-        
+
+        const okxClient = getOkxClient();
+
+        // Specs de l'instrument
+        const instrRes = await okxClient.getInstruments({ instType: 'SWAP', instId: symbol });
+        const inst = instrRes.data[0];
+        const ctVal  = parseFloat(inst.ctVal);
+        const lotSz  = parseFloat(inst.lotSz);
+        const tickSz = parseFloat(inst.tickSz);
+        const priceDecimalPlaces = getDecimalPlaces(tickSz);
+
         const slAndTpLevels = getSlAndTpLevels(type);
 
-        // Calcul des prix
-        const takeProfitPrice = side === 'BUY' 
-            ? price * (1 + slAndTpLevels.take_profit / 100) 
-            : price * (1 - slAndTpLevels.take_profit / 100); 
+        // Calcul des prix TP / SL (logique identique à l'original)
+        const takeProfitPrice = side === 'BUY'
+            ? price * (1 + slAndTpLevels.take_profit / 100)
+            : price * (1 - slAndTpLevels.take_profit / 100);
 
-        const stopLossPrice = side === 'BUY' 
-            ? price * (1 - slAndTpLevels.stop_loss / 100) 
-            : price * (1 + slAndTpLevels.stop_loss / 100); 
+        const stopLossPrice = side === 'BUY'
+            ? price * (1 - slAndTpLevels.stop_loss / 100)
+            : price * (1 + slAndTpLevels.stop_loss / 100);
 
-        const stopLimitPrice = side === 'BUY' 
-            ? stopLossPrice * 0.99 // Ajustement limite pour LONG
-            : stopLossPrice * 1.01; // Ajustement limite pour SHORT
+        console.log('Take Profit Price :', takeProfitPrice.toFixed(priceDecimalPlaces));
+        console.log('Stop Loss Price   :', stopLossPrice.toFixed(priceDecimalPlaces));
 
-        console.log('Take Profit Price :', takeProfitPrice.toFixed(2));
-        console.log('Stop Loss Price :', stopLossPrice.toFixed(2));
-        console.log('Stop Limit Price :', stopLimitPrice.toFixed(2));
+        // assetsAvailable est en base asset (BTC/DOGE) → conversion en contrats
+        let finalContracts = Math.floor(assetsAvailable / ctVal);
+        finalContracts = Math.floor(finalContracts / lotSz) * lotSz;
 
-        // Récupération des données pour le symbole
-        const exchangeInfo = await binance.exchangeInfo();
-        const symbolInfo = exchangeInfo.symbols.find(s => s.symbol === symbol);
-
-        const lotSizeFilter = symbolInfo.filters.find(f => f.filterType === 'LOT_SIZE');
-        const stepSize = parseFloat(lotSizeFilter.stepSize);
-        const minQty = parseFloat(lotSizeFilter.minQty);
-        const decimalPlaces = getDecimalPlaces(stepSize);
-
-        let adjustedQuantity = Math.floor(assetsAvailable / stepSize) * stepSize;
-        adjustedQuantity = parseFloat(adjustedQuantity.toFixed(decimalPlaces));
-
-        if (adjustedQuantity < minQty) {
-            throw new Error(`Quantité trop faible pour ${symbol}. Minimum requis : ${minQty}`);
+        if (finalContracts < lotSz) {
+            throw new Error(`Quantité trop faible pour ${symbol}. Minimum requis : ${lotSz} contrat(s)`);
         }
 
-        const finalQuantity = adjustedQuantity.toFixed(decimalPlaces);
+        console.log('Quantité finale (contrats) =>', finalContracts);
 
-        console.log('Quantité finale ajustée =>', finalQuantity);
+        // Côté de clôture : inverse du côté d'ouverture
+        const closeSide = side === 'BUY' ? 'sell' : 'buy';
 
-        const priceFilter = symbolInfo.filters.find(f => f.filterType === 'PRICE_FILTER');
-        const tickSize = parseFloat(priceFilter.tickSize);
-        const priceDecimalPlaces = getDecimalPlaces(tickSize);
-
-        const closeSide = side === 'BUY' ? 'SELL' : 'BUY';
-
-        // Passer l'ordre OCO
-        const ocoOrder = await binance.marginOrderOco({
-            symbol,
-            side: closeSide, // Si on a acheté, on vend pour clôturer
-            quantity: finalQuantity,        // Quantité arrondie
-            price: takeProfitPrice.toFixed(priceDecimalPlaces),    // Prix du Take Profit
-            stopPrice: stopLossPrice.toFixed(priceDecimalPlaces),  // Prix du Stop Loss
-            stopLimitPrice: stopLimitPrice.toFixed(priceDecimalPlaces), // Prix limite du Stop Loss
-            stopLimitTimeInForce: 'GTC',          // Good 'Til Cancelled
-            isIsolated: true,                     // Utilisation du portefeuille isolé
-            sideEffectType: closeSide === 'BUY' ? 'AUTO_REPAY' : 'NO_SIDE_EFFECT',
+        // Algo ordre OCO OKX — clôture uniquement (reduceOnly)
+        const algoRes = await okxClient.placeAlgoOrder({
+            instId:       symbol,
+            tdMode:       'isolated',
+            side:         closeSide,
+            ordType:      'oco',
+            sz:           String(finalContracts),
+            tpTriggerPx:  takeProfitPrice.toFixed(priceDecimalPlaces),
+            tpOrdPx:      '-1',     // exécution market au déclenchement TP
+            slTriggerPx:  stopLossPrice.toFixed(priceDecimalPlaces),
+            slOrdPx:      '-1',     // exécution market au déclenchement SL
+            reduceOnly:   'true',
         });
 
-        console.log('Ordre OCO passé avec succès :', ocoOrder);
+        if (algoRes.data?.[0]?.sCode !== '0') {
+            throw new Error(`Erreur placeAlgoOrder OKX : ${algoRes.data?.[0]?.sMsg || JSON.stringify(algoRes)}`);
+        }
+
+        console.log('Ordre OCO OKX passé avec succès :', algoRes.data[0]);
 
         bot.sendMessage(
             chatId,
-            `✅ Ordre OCO ajusté :
-            - Take profit : ${takeProfitPrice.toFixed(priceDecimalPlaces)} USDC
-            - Stop loss : ${stopLossPrice.toFixed(priceDecimalPlaces)} USDC
-            - Stop limite : ${stopLimitPrice.toFixed(priceDecimalPlaces)} USDC
-            `
+            `✅ Ordre OCO ajusté :\n` +
+            `            - Take profit : ${takeProfitPrice.toFixed(priceDecimalPlaces)} USDC\n` +
+            `            - Stop loss : ${stopLossPrice.toFixed(priceDecimalPlaces)} USDC\n`
         );
     } catch (error) {
-        console.error('Erreur lors du passage de l\'ordre OCO :', error.response?.data || error.message);
+        console.error('Erreur lors du passage de l\'ordre OCO :', error.message);
         throw error;
     }
 };

@@ -1,563 +1,328 @@
 require("dotenv").config();
-const express = require("express");
+const express    = require("express");
 const bodyParser = require("body-parser");
-const Binance = require("binance-api-node").default;
-const { ErrorCodes } = require("binance-api-node");
 const TelegramBot = require("node-telegram-bot-api");
-const { getIsolatedMarginAccount } = require("./getIsolatedMarginAccount");
+const { getOkxClient } = require("./okxClient");
 const { getBalanceData } = require("./getBalanceData");
 const { takeLongPosition } = require("./actions/takeLongPosition");
 const { takeShortPosition } = require("./actions/takeShortPosition");
 const { placeOCOOrder } = require("./actions/placeOcoOrder");
-const { scheduleMonthlyReport, sendMonthlyReport } = require("./monthlyReport"); // Import du fichier pour le rapport mensuel
+const { scheduleMonthlyReport, sendMonthlyReport } = require("./monthlyReport");
 const { handleCloseLong } = require("./actions/handleCloseLong");
 const { handleCloseShort } = require("./actions/handleCloseShort");
-const WebSocket = require("ws");
-const { getListenToken } = require("./websocket");
+const { createOkxWebSocket } = require("./websocket");
 const { getPositionStatus } = require("./getPositionStatus");
 
 // Configuration de Telegram
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
+const bot    = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
 const chatId = process.env.TELEGRAM_CHAT_ID;
 
 // Instance Express
-const app = express();
+const app  = express();
 const port = 3000;
-
 const externalURL = `http://localhost:${port}`;
 
-// Middleware pour traiter les JSON reçus par tradingview
 app.use(bodyParser.json());
 
-// Configuration de Binance API pour le swing trading
-const binanceMargin = Binance({
-  apiKey: process.env.BINANCE_MARGIN_API_KEY,
-  apiSecret: process.env.BINANCE_MARGIN_API_SECRET,
-  reconnect: true, // Permet de se reconnecter automatiquement
-  verbose: true, // Affiche les logs pour aider au débogage
-  getTime: () => Date.now(),
-});
-
 // Variables de base
-
 const initialCapital = 2000; // Capital initial par actif en USDC
-const totalCapital = initialCapital * 2; // BTC + DOGE
+const totalCapital   = initialCapital * 2; // BTC + DOGE
+
+const symbols = ["BTC-USDC-SWAP", "DOGE-USDC-SWAP"];
+
 const initialPrices = {
-  BTCUSDC: null,
-  DOGEUSDC: null,
+    "BTC-USDC-SWAP":  null,
+    "DOGE-USDC-SWAP": null,
 };
 const profits = {
-  BTCUSDC: { monthly: 0, cumulative: 0 },
-  DOGEUSDC: { monthly: 0, cumulative: 0 },
+    "BTC-USDC-SWAP":  { monthly: 0, cumulative: 0 },
+    "DOGE-USDC-SWAP": { monthly: 0, cumulative: 0 },
 };
 
-const symbols = ["BTCUSDC", "DOGEUSDC"];
-
-// WebSocket API Binance — user data stream via userDataStream.subscribe.listenToken
-// (remplace /userDataStream/isolated déprécié en fév. 2026 ; nécessite un token par symbol isolated)
-const WS_API_URL = "wss://ws-api.binance.com:443/ws-api/v3";
-
-let sharedWs = null;
-let sharedRefreshTimer = null;
-let sharedPingTimer = null;
+// Taille de contrat par symbol — peuplée au startup depuis getInstruments
+const contractSizes = {
+    "BTC-USDC-SWAP":  null,
+    "DOGE-USDC-SWAP": null,
+};
 
 // Lock anti double traitement, un par symbole
-const orderHandled = new Map(symbols.map((s) => [s, false]));
-
+const orderHandled      = new Map(symbols.map(s => [s, false]));
 // Lock anti double webhook, un par symbole
-const webhookProcessing = new Map(symbols.map((s) => [s, false]));
+const webhookProcessing = new Map(symbols.map(s => [s, false]));
 
-const createSharedWebSocket = async () => {
-  // Nettoyage si on relance
-  if (sharedWs) { try { sharedWs.terminate(); } catch {} sharedWs = null; }
-  if (sharedRefreshTimer) { clearTimeout(sharedRefreshTimer); sharedRefreshTimer = null; }
-  if (sharedPingTimer) { clearInterval(sharedPingTimer); sharedPingTimer = null; }
+let wsClient = null;
 
-  // Un token par symbol isolated margin (le token sans symbol = cross margin, events non reçus)
-  const tokenResults = await Promise.all(symbols.map(s => getListenToken(s)));
+const startUserWebSocket = () => {
+    wsClient = createOkxWebSocket({
+        symbols,
+        bot,
+        chatId,
+        onOrderFill: async (order) => {
+            const symbol = order.instId;
 
-  const ws = new WebSocket(WS_API_URL);
-  sharedWs = ws;
+            if (orderHandled.get(symbol)) {
+                console.warn(`⛔ Event ignoré car déjà traité pour ${symbol}`);
+                return;
+            }
+            orderHandled.set(symbol, true);
+            console.log(`✅ Ordre OCO exécuté pour ${symbol}`);
 
-  ws.on("open", () => {
-    console.log("[WS] WebSocket API Binance connecté.");
+            const executedPrice    = parseFloat(order.avgPx);
+            const filledContracts  = parseFloat(order.accFillSz);
+            const ctVal            = contractSizes[symbol] || 1;
+            const executedQuantity = filledContracts * ctVal;
 
-    // Souscription aux events de chaque symbol isolated margin
-    tokenResults.forEach(({ token }, i) => {
-      ws.send(JSON.stringify({
-        id: `sub-${symbols[i]}-${Date.now()}`,
-        method: "userDataStream.subscribe.listenToken",
-        params: { listenToken: token }
-      }));
+            try {
+                if (order.side === 'sell') {
+                    await handleCloseLong(
+                        symbol,
+                        initialPrices[symbol],
+                        executedPrice,
+                        executedQuantity,
+                        initialCapital,
+                        profits[symbol],
+                        bot,
+                        chatId
+                    );
+                } else if (order.side === 'buy') {
+                    await handleCloseShort(
+                        symbol,
+                        initialPrices[symbol],
+                        executedPrice,
+                        executedQuantity,
+                        initialCapital,
+                        profits[symbol],
+                        bot,
+                        chatId
+                    );
+                }
+                orderHandled.set(symbol, false);
+            } catch (error) {
+                console.error(`❌ Erreur traitement WebSocket pour ${symbol}:`, error.message);
+                bot.sendMessage(chatId, `❌ Erreur traitement OCO ${symbol}: ${error.message}`);
+                orderHandled.set(symbol, false);
+            }
+        },
     });
-    console.log(`[WS] Souscriptions envoyées pour: ${symbols.join(', ')}`);
 
-    // Reconnexion avant expiration du premier token (token valide 24h, reconnexion à 23h)
-    const earliestExpiry = Math.min(...tokenResults.map(t => t.expirationTime));
-    const expirationMs = earliestExpiry > 1e12 ? earliestExpiry : earliestExpiry * 1000;
-    const msUntilExpiry = expirationMs - Date.now();
-    const refreshDelay = Math.max(msUntilExpiry - 60 * 60 * 1000, 60 * 1000);
-    console.log(`Token expire dans ${Math.round(msUntilExpiry / 60000)} min, reconnexion dans ${Math.round(refreshDelay / 60000)} min`);
-
-    sharedRefreshTimer = setTimeout(() => {
-      console.log("🔄 Token expirant, reconnexion WebSocket...");
-      try { ws.terminate(); } catch {}
-    }, refreshDelay);
-  });
-
-  // Liveness check : ping toutes les 3 min
-  ws.isAlive = true;
-  ws.on("pong", () => { ws.isAlive = true; });
-
-  sharedPingTimer = setInterval(() => {
-    if (ws.isAlive === false) {
-      console.warn("⚠️ Pas de pong reçu, connexion morte, reconnexion forcée...");
-      clearInterval(sharedPingTimer);
-      sharedPingTimer = null;
-      ws.terminate();
-      return;
-    }
-    ws.isAlive = false;
-    try { ws.ping(); } catch {}
-  }, 3 * 60 * 1000);
-
-  ws.on("message", async (data) => {
-    const rawStr = data.toString();
-    console.log("[WS RAW]", rawStr.substring(0, 500));
-
-    let message;
-    try {
-      message = JSON.parse(rawStr);
-    } catch {
-      console.warn("[WS] Message non-JSON reçu:", rawStr.substring(0, 200));
-      return;
-    }
-    const event = message.data || message;
-
-    // Réponse de souscription (status 200) — confirme que Binance a bien enregistré la souscription
-    if (message.id && message.status !== undefined) {
-      if (message.status !== 200) console.error("[WS] Souscription échouée :", message);
-      else console.log("[WS] Souscription confirmée par Binance (id:", message.id, ")");
-      return;
-    }
-
-    if (!event.e) {
-      console.log("[WS] Message sans event type:", JSON.stringify(message).substring(0, 300));
-      return;
-    }
-
-    // Diagnostic : log tout ce qui arrive
-    console.log(`[WS] event=${event.e} symbol=${event.s} status=${event.X} orderType=${event.o} side=${event.S}`);
-
-    // Token expiré sans renouvellement — forcer reconnexion
-    if (event.e === "eventStreamTerminated") {
-      console.warn("[WS] eventStreamTerminated reçu, reconnexion forcée...");
-      try { ws.terminate(); } catch {}
-      return;
-    }
-
-    if (event.e !== "executionReport") return;
-    if (!symbols.includes(event.s)) return;
-    if (event.X !== "FILLED") return;
-    if (!["STOP_LOSS_LIMIT", "LIMIT_MAKER", "LIMIT"].includes(event.o)) {
-      console.warn(`[WS] Ordre ignoré - type non reconnu: ${event.o}`);
-      return;
-    }
-
-    const symbol = event.s;
-    console.log(`Message WebSocket reçu pour ${symbol}:`, event);
-
-    if (orderHandled.get(symbol)) {
-      console.warn(`⛔ Event ignoré car déjà traité pour ${symbol}`);
-      return;
-    }
-
-    orderHandled.set(symbol, true);
-    console.log(`✅ Ordre OCO exécuté pour ${symbol}`);
-
-    const executedPrice = parseFloat(event.L || event.p);
-    const executedQuantity = parseFloat(event.q);
-
-    try {
-      if (event.S === "SELL") {
-        await handleCloseLong(
-          symbol,
-          initialPrices[symbol],
-          executedPrice,
-          executedQuantity,
-          initialCapital,
-          profits[symbol],
-          bot,
-          chatId
-        );
-      } else if (event.S === "BUY") {
-        await handleCloseShort(
-          symbol,
-          initialPrices[symbol],
-          executedPrice,
-          executedQuantity,
-          initialCapital,
-          profits[symbol],
-          bot,
-          chatId
-        );
-      }
-      orderHandled.set(symbol, false);
-    } catch (error) {
-      console.error(`❌ Erreur lors du traitement WebSocket pour ${symbol}:`, error.message);
-      bot.sendMessage(chatId, `❌ Erreur traitement OCO ${symbol}: ${error.message}`);
-      orderHandled.set(symbol, false);
-    }
-  });
-
-  ws.on("error", (err) => {
-    console.error("Erreur WebSocket partagé :", err);
-  });
-
-  ws.on("close", () => {
-    console.log("WebSocket partagé fermé. Reconnexion dans 5s...");
-    if (sharedRefreshTimer) { clearTimeout(sharedRefreshTimer); sharedRefreshTimer = null; }
-    if (sharedPingTimer) { clearInterval(sharedPingTimer); sharedPingTimer = null; }
-    sharedWs = null;
-    setTimeout(createSharedWebSocket, 5000);
-  });
-};
-
-const startUserWebSocket = async () => {
-  await createSharedWebSocket();
-
-  // Notification Telegram toutes les 12h pour confirmer que le WebSocket est actif
-  setInterval(() => {
-    const isAlive = sharedWs && sharedWs.readyState === WebSocket.OPEN;
-    const status = isAlive ? "✅ WebSocket Binance actif" : "⚠️ WebSocket Binance inactif (reconnexion en cours...)";
-    const now = new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" });
-    bot.sendMessage(chatId, `${status}\n🕐 ${now}`);
-  }, 12 * 60 * 60 * 1000);
+    // Notification Telegram toutes les 12h pour confirmer que le WebSocket est actif
+    setInterval(() => {
+        const now = new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" });
+        bot.sendMessage(chatId, `✅ WebSocket OKX actif\n🕐 ${now}`);
+    }, 12 * 60 * 60 * 1000);
 };
 
 // Setter pour réinitialiser les profits mensuels
 const resetMonthlyProfit = () => {
-  profits.BTCUSDC.monthly = 0;
-  profits.DOGEUSDC.monthly = 0;
-  console.log("Profit mensuel réinitialisé.");
+    profits["BTC-USDC-SWAP"].monthly  = 0;
+    profits["DOGE-USDC-SWAP"].monthly = 0;
+    console.log("Profit mensuel réinitialisé.");
 };
 
-// Route pour tester la connexion
-app.get("/", (_, res) => {
-  res.send("Le serveur fonctionne correctement !");
-});
+// Routes
+app.get("/", (_, res) => res.send("Le serveur fonctionne correctement !"));
 
 app.use((req, res, next) => {
-  console.log(`Requête reçue de : ${req.ip}`);
-  next();
+    console.log(`Requête reçue de : ${req.ip}`);
+    next();
 });
 
-// Test du message d'achat du bot
 app.get("/buy-test", (_, res) => {
-  const symbol = "BTC / USDC";
-  const quantity = 0.00015;
-  const price = 1000;
-  const stopLoss = price * 0.96;
-  const takeProfit = price * 1.08;
-  const potentialGain = takeProfit - price;
-  const potentialLoss = stopLoss - price;
-
-  bot.sendMessage(
-    chatId,
-    `✅ Ordre d'achat exécuté :
-        - Symbole : ${symbol}
-        - Quantité : ${quantity}
-        - Prix : ${price} USDC 
-        - Gain potentiel : ${potentialGain} USDC
-        - Perte potentielle : ${potentialLoss} USDC
-        `
-  );
-  res.status(200).send("Rapport mensuel envoyé (test).");
+    const symbol      = "BTC / USDC";
+    const price       = 1000;
+    const stopLoss    = price * 0.96;
+    const takeProfit  = price * 1.08;
+    bot.sendMessage(
+        chatId,
+        `✅ Ordre d'achat exécuté :\n` +
+        `        - Symbole : ${symbol}\n` +
+        `        - Prix : ${price} USDC\n` +
+        `        - Gain potentiel : ${takeProfit - price} USDC\n` +
+        `        - Perte potentielle : ${stopLoss - price} USDC\n`
+    );
+    res.status(200).send("Rapport mensuel envoyé (test).");
 });
 
-// Test du compte rendu mensuel
 app.get("/test-monthly-report", (_, res) => {
-  // Appel direct à la fonction pour générer un rapport
-  sendMonthlyReport(
-    bot,
-    chatId,
-    profits.BTCUSDC.cumulative + profits.DOGEUSDC.cumulative,
-    totalCapital,
-    profits.BTCUSDC.monthly + profits.DOGEUSDC.monthly
-  );
-  res.status(200).send("Rapport mensuel envoyé (test).");
+    sendMonthlyReport(
+        bot,
+        chatId,
+        profits["BTC-USDC-SWAP"].cumulative + profits["DOGE-USDC-SWAP"].cumulative,
+        totalCapital,
+        profits["BTC-USDC-SWAP"].monthly + profits["DOGE-USDC-SWAP"].monthly
+    );
+    res.status(200).send("Rapport mensuel envoyé (test).");
 });
 
 app.get("/balance", async (_, res) => {
-  try {
-    // Appel à l'API pour récupérer le portefeuille de marge isolée
-    const data = await getIsolatedMarginAccount(
-      process.env.BINANCE_MARGIN_API_KEY,
-      process.env.BINANCE_MARGIN_API_SECRET
-    );
-
-    // Recherche de la paire BTCUSDC
-    const btcUsdcData = data.assets.find((asset) => asset.symbol === "BTCUSDC");
-
-    if (!btcUsdcData) {
-      throw new Error(
-        "La paire BTCUSDC n'a pas été trouvée dans le portefeuille isolé."
-      );
+    try {
+        const data = await getBalanceData("BTC-USDC-SWAP");
+        res.status(200).json({
+            message:      "Solde OKX récupéré avec succès",
+            usdcBalance:  data.quoteAsset.free,
+        });
+    } catch (error) {
+        console.error("Erreur lors de la récupération de la balance :", error.message);
+        res.status(500).json({ error: "Impossible de récupérer la balance" });
     }
-
-    // Extraire les balances pour BTC (baseAsset) et USDC (quoteAsset)
-    const usdcBalance = btcUsdcData.quoteAsset.free;
-    const btcBalance = btcUsdcData.baseAsset.free;
-
-    res.status(200).json({
-      message: "Solde de marge isolée récupéré avec succès",
-      usdcBalance,
-      btcBalance,
-    });
-  } catch (error) {
-    console.error(
-      "Erreur lors de la récupération de la balance isolée :",
-      error.message
-    );
-    res
-      .status(500)
-      .json({ error: "Impossible de récupérer la balance isolée" });
-  }
 });
 
 // Endpoint Webhook pour recevoir les alertes de TradingView
 app.post("/webhook", async (req, res) => {
-  const { action, type, symbol, key } = req.body;
+    const { action, type, symbol, key } = req.body;
 
-  // Vérification de la clé secrète
-  if (key !== process.env.WEBHOOK_SECRET) {
-    console.log("clé secrète incorrecte");
-    return res.status(401).send("Clé secrète incorrecte.");
-  }
-
-  if (webhookProcessing.get(symbol)) {
-    console.warn(`⛔ Webhook ignoré : traitement déjà en cours pour ${symbol}`);
-    await bot.sendMessage(chatId, `⚠️ Webhook dupliqué ignoré pour ${symbol} (traitement en cours).`);
-    return res.status(200).send("Webhook dupliqué ignoré.");
-  }
-
-  webhookProcessing.set(symbol, true);
-
-  try {
-    console.log("début du webhook");
-
-    // Prix actuel BTC / USDC ou DOGE / USDC
-    const prices = await binanceMargin.prices();
-    const price = parseFloat(prices[symbol]);
-
-    console.log(`Prix actuel de l'actif pour ${symbol} => ${price} USDC`);
-
-    // 🧠 Vérifier s'il y a déjà une position significative ouverte
-    const positionStatus = await getPositionStatus(symbol, price);
-    console.log(`Status position pour ${symbol} :`, positionStatus);
-
-    if (positionStatus.hasOpenPosition) {
-      const direction = positionStatus.hasLong ? "LONG" : "SHORT";
-
-      const msg = `⚠️ Trade bloqué sur ${symbol} :
-                        - Position déjà ouverte côté Binance
-                        - Direction: ${direction}
-                        - Long notionnel: ${positionStatus.longNotional.toFixed(
-                          2
-                        )} USDC
-                        - Short notionnel: ${positionStatus.shortNotional.toFixed(
-                          2
-                        )} USDC
-
-                        Trade manuel requis.`;
-
-      console.warn(msg);
-      await bot.sendMessage(chatId, msg);
-
-      return res
-        .status(200)
-        .send("Trade bloqué : position déjà ouverte sur Binance.");
+    if (key !== process.env.WEBHOOK_SECRET) {
+        console.log("clé secrète incorrecte");
+        return res.status(401).send("Clé secrète incorrecte.");
     }
 
-    // ****** GESTION POSITION LONGUE  ****** //
-
-    // ACHAT LONG
-    if (action === "LONG") {
-      // Récupération de la balance USDC avant l'achat
-      let balanceData = await getBalanceData(symbol);
-      const usdcBalance = parseFloat(balanceData.quoteAsset.free);
-      console.log(
-        `balance USDC avant position longue pour ${symbol} =>`,
-        usdcBalance
-      );
-
-      const longOrder = await takeLongPosition(
-        binanceMargin,
-        symbol,
-        type,
-        price,
-        usdcBalance,
-        bot,
-        chatId
-      );
-
-      initialPrices[symbol] = longOrder.initialPrice;
-
-      console.log(`Actifs achetés sur ${initialPrices[symbol]} pour ${symbol}`);
-
-      const assetsBought = parseFloat(longOrder.order.executedQty); // Quantité exacte achetée
-      console.log("Actifs achetés dans cet ordre :", assetsBought);
-
-      const feeRate = 0.001;
-      const assetsAvailable = assetsBought * (1 - feeRate); // Enlève les frais
-      console.log(
-        `Actifs réellement disponibles après frais: ${assetsAvailable}`
-      );
-
-      // Ordre OCO : gestion des SL et TP en limit
-      await placeOCOOrder(
-        binanceMargin,
-        symbol,
-        type,
-        "BUY",
-        price,
-        assetsAvailable,
-        bot,
-        chatId
-      );
+    if (webhookProcessing.get(symbol)) {
+        console.warn(`⛔ Webhook ignoré : traitement déjà en cours pour ${symbol}`);
+        await bot.sendMessage(chatId, `⚠️ Webhook dupliqué ignoré pour ${symbol} (traitement en cours).`);
+        return res.status(200).send("Webhook dupliqué ignoré.");
     }
 
-    // ****** GESTION POSITION COURTE  ****** //
-    // VENTE SHORT
-    else if (action === "SHORT") {
-      // Récupération de la balance USDC avant la vente
-      let balanceData = await getBalanceData(symbol);
-      const usdcBalance = parseFloat(balanceData.quoteAsset.free);
+    webhookProcessing.set(symbol, true);
 
-      console.log("balance USDC avant position courte =>", usdcBalance);
+    try {
+        console.log("début du webhook");
 
-      const shortOrder = await takeShortPosition(
-        binanceMargin,
-        symbol,
-        type,
-        price,
-        usdcBalance,
-        bot,
-        chatId
-      );
+        // Prix actuel via ticker OKX
+        const okxClient = getOkxClient();
+        const tickerRes = await okxClient.getTicker({ instId: symbol });
+        const price     = parseFloat(tickerRes.data[0].last);
+        console.log(`Prix actuel de l'actif pour ${symbol} => ${price} USDC`);
 
-      initialPrices[symbol] = shortOrder.initialPrice;
+        // Vérifier s'il y a déjà une position ouverte
+        const positionStatus = await getPositionStatus(symbol);
+        console.log(`Status position pour ${symbol} :`, positionStatus);
 
-      console.log(`Actifs shortés sur ${initialPrices[symbol]} pour ${symbol}`);
+        if (positionStatus.hasOpenPosition) {
+            const direction = positionStatus.hasLong ? "LONG" : "SHORT";
+            const msg =
+                `⚠️ Trade bloqué sur ${symbol} :\n` +
+                `                        - Position déjà ouverte côté OKX\n` +
+                `                        - Direction: ${direction}\n` +
+                `                        - Long notionnel: ${positionStatus.longNotional.toFixed(2)} USDC\n` +
+                `                        - Short notionnel: ${positionStatus.shortNotional.toFixed(2)} USDC\n\n` +
+                `                        Trade manuel requis.`;
+            console.warn(msg);
+            await bot.sendMessage(chatId, msg);
+            return res.status(200).send("Trade bloqué : position déjà ouverte sur OKX.");
+        }
 
-      const assetsSold = parseFloat(shortOrder.order.executedQty); // Quantité exacte vendue
-      console.log("Nombre shorté dans cet ordre :", assetsSold);
+        // ****** GESTION POSITION LONGUE ****** //
+        if (action === "LONG") {
+            let balanceData  = await getBalanceData(symbol);
+            const usdcBalance = parseFloat(balanceData.quoteAsset.free);
+            console.log(`balance USDC avant position longue pour ${symbol} =>`, usdcBalance);
 
-      // Pour un SHORT, les frais de vente sont payés en USDC, pas en actif.
-      // L'OCO doit racheter exactement la quantité empruntée pour éviter les résidus de dette.
-      const assetsAvailable = assetsSold;
-      console.log(
-        `Actifs à racheter (quantité empruntée) : ${assetsAvailable}`
-      );
+            const longOrder = await takeLongPosition(symbol, type, price, usdcBalance, bot, chatId);
 
-      // Ordre OCO : gestion des SL et TP en limit
-      await placeOCOOrder(
-        binanceMargin,
-        symbol,
-        type,
-        "SELL",
-        price,
-        assetsAvailable,
-        bot,
-        chatId
-      );
+            initialPrices[symbol]    = longOrder.initialPrice;
+            contractSizes[symbol]    = longOrder.ctVal;
+            const assetsBought       = parseFloat(longOrder.order.executedQty);
+            console.log(`Actifs achetés sur ${initialPrices[symbol]} pour ${symbol}`);
+
+            const feeRate        = 0.001;
+            const assetsAvailable = assetsBought * (1 - feeRate);
+            console.log(`Actifs réellement disponibles après frais: ${assetsAvailable}`);
+
+            await placeOCOOrder(symbol, type, "BUY", price, assetsAvailable, bot, chatId);
+        }
+
+        // ****** GESTION POSITION COURTE ****** //
+        else if (action === "SHORT") {
+            let balanceData   = await getBalanceData(symbol);
+            const usdcBalance = parseFloat(balanceData.quoteAsset.free);
+            console.log("balance USDC avant position courte =>", usdcBalance);
+
+            const shortOrder = await takeShortPosition(symbol, type, price, usdcBalance, bot, chatId);
+
+            initialPrices[symbol] = shortOrder.initialPrice;
+            contractSizes[symbol] = shortOrder.ctVal;
+            const assetsSold      = parseFloat(shortOrder.order.executedQty);
+            console.log(`Actifs shortés sur ${initialPrices[symbol]} pour ${symbol}`);
+
+            await placeOCOOrder(symbol, type, "SELL", price, assetsSold, bot, chatId);
+        }
+
+        res.status(200).send("Ordre effectué avec succès.");
+    } catch (error) {
+        console.error("Erreur générale :", error.message);
+        bot.sendMessage(chatId, `❌ Erreur : ${error.message}`);
+        res.status(500).json({ message: "Erreur lors de l'exécution de l'ordre.", error: error.message });
+    } finally {
+        webhookProcessing.set(symbol, false);
     }
-
-    res.status(200).send("Ordre effectué avec succès.");
-  } catch (error) {
-    console.log("le code erreur =>", error.code);
-
-    if (error.code === ErrorCodes.INSUFFICIENT_BALANCE) {
-      console.error("Erreur : Solde insuffisant pour effectuer l'ordre.");
-    } else if (error.code === ErrorCodes.INVALID_ORDER_TYPE) {
-      console.error("Erreur : Type d'ordre invalide.");
-    } else if (error.code === -2010) {
-      // "New order rejected"
-      console.error(
-        "Erreur : Nouvel ordre rejeté. Vérifiez les règles de la paire."
-      );
-    } else {
-      console.error("Erreur générale :", error.message);
-    }
-
-    bot.sendMessage(chatId, `❌ Erreur : ${error.message}`);
-    res.status(500).json({
-      message: "Erreur lors de l'exécution de l'ordre.",
-      error: error.message,
-    });
-  } finally {
-    webhookProcessing.set(symbol, false);
-  }
 });
 
 // Lancer le serveur
 app.listen(port, () => {
-  console.log(`Serveur en cours d'exécution sur ${externalURL}`);
+    console.log(`Serveur en cours d'exécution sur ${externalURL}`);
 });
 
 const runStartupChecks = async () => {
-  console.log("🔍 Démarrage des tests de santé...");
+    console.log("🔍 Démarrage des tests de santé...");
 
-  // 1. Variables d'environnement
-  const requiredEnvVars = [
-    "BINANCE_MARGIN_API_KEY",
-    "BINANCE_MARGIN_API_SECRET",
-    "TELEGRAM_BOT_TOKEN",
-    "TELEGRAM_CHAT_ID",
-    "WEBHOOK_SECRET",
-  ];
-  const missingVars = requiredEnvVars.filter((v) => !process.env[v]);
-  if (missingVars.length > 0) {
-    throw new Error(`Variables d'environnement manquantes : ${missingVars.join(", ")}`);
-  }
-  console.log("✅ Variables d'environnement OK");
+    // 1. Variables d'environnement
+    const requiredEnvVars = [
+        "OKX_API_KEY",
+        "OKX_API_SECRET",
+        "OKX_PASSPHRASE",
+        "TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_CHAT_ID",
+        "WEBHOOK_SECRET",
+    ];
+    const missingVars = requiredEnvVars.filter(v => !process.env[v]);
+    if (missingVars.length > 0) {
+        throw new Error(`Variables d'environnement manquantes : ${missingVars.join(", ")}`);
+    }
+    console.log("✅ Variables d'environnement OK");
 
-  // 2. Connexion Binance (ping)
-  await binanceMargin.ping();
-  console.log("✅ Binance API accessible");
+    // 2. Connexion OKX (heure serveur)
+    const okxClient = getOkxClient();
+    await okxClient.getServerTime();
+    console.log("✅ OKX API accessible");
 
-  // 3. Clé API Binance valide (récupération du temps serveur + account check)
-  await binanceMargin.accountInfo({ useServerTime: true });
-  console.log("✅ Clé API Binance valide");
+    // 3. Clé API OKX valide (balance)
+    await okxClient.getAccountBalance({ ccy: 'USDC' });
+    console.log("✅ Clé API OKX valide");
 
-  // 4. Telegram bot
-  const me = await bot.getMe();
-  console.log(`✅ Telegram bot connecté : @${me.username}`);
+    // 4. Récupère les tailles de contrat pour chaque symbol
+    for (const symbol of symbols) {
+        const instrRes = await okxClient.getInstruments({ instType: 'SWAP', instId: symbol });
+        contractSizes[symbol] = parseFloat(instrRes.data[0].ctVal);
+        console.log(`✅ ${symbol} ctVal = ${contractSizes[symbol]}`);
+    }
 
-  console.log("🚀 Tous les tests de santé passés. Démarrage du serveur...");
+    // 5. Telegram bot
+    const me = await bot.getMe();
+    console.log(`✅ Telegram bot connecté : @${me.username}`);
+
+    console.log("🚀 Tous les tests de santé passés. Démarrage du serveur...");
 };
 
 const init = async () => {
-  try {
-    await runStartupChecks();
-  } catch (err) {
-    console.error("❌ Echec des tests de santé au démarrage :", err.message);
-    if (err.response?.data) console.error("   Détail Binance :", err.response.data);
-    console.error("⚠️  Le serveur démarre quand même, mais des fonctionnalités peuvent être indisponibles.");
-  }
+    try {
+        await runStartupChecks();
+    } catch (err) {
+        console.error("❌ Echec des tests de santé au démarrage :", err.message);
+        console.error("⚠️  Le serveur démarre quand même, mais des fonctionnalités peuvent être indisponibles.");
+    }
 
-  await startUserWebSocket(); // Données de Binance
-  scheduleMonthlyReport(
-    bot,
-    chatId,
-    () => profits.BTCUSDC.cumulative + profits.DOGEUSDC.cumulative,
-    () => profits.BTCUSDC.monthly + profits.DOGEUSDC.monthly,
-    resetMonthlyProfit,
-    totalCapital
-  ); // Rapport Telegram mensuel
+    startUserWebSocket();
+    scheduleMonthlyReport(
+        bot,
+        chatId,
+        () => profits["BTC-USDC-SWAP"].cumulative + profits["DOGE-USDC-SWAP"].cumulative,
+        () => profits["BTC-USDC-SWAP"].monthly     + profits["DOGE-USDC-SWAP"].monthly,
+        resetMonthlyProfit,
+        totalCapital
+    );
 };
 
-init().catch((err) => {
-  console.error("❌ Erreur fatale init :", err.message);
-  process.exit(1);
+init().catch(err => {
+    console.error("❌ Erreur fatale init :", err.message);
+    process.exit(1);
 });

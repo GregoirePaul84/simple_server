@@ -1,22 +1,24 @@
-const { getIsolatedMarginAccount } = require('./getIsolatedMarginAccount');
+const { getOkxClient } = require('./okxClient');
 
-const getBalanceData = async(symbol) => {
+const getBalanceData = async (symbol) => {
     console.log(`Récup de la balance pour ${symbol}`);
-    
-    // Récupération du solde pour le portefeuille de marge isolée
-    const marginAccount = await getIsolatedMarginAccount(
-        process.env.BINANCE_MARGIN_API_KEY,
-        process.env.BINANCE_MARGIN_API_SECRET
-    );
-    
-    // Balances pour BTC / USDC ou DOGE / USDC
-    const balanceData = marginAccount.assets.find(asset => asset.symbol === symbol);
-    
-    if (!balanceData) {
-        throw new Error(`La paire ${balanceData} n'a pas été trouvée dans le portefeuille isolé.`);
+
+    const okxClient = getOkxClient();
+    const res = await okxClient.getAccountBalance({ ccy: 'USDC' });
+
+    if (!res.data || res.data.length === 0) {
+        throw new Error('Impossible de récupérer la balance OKX.');
     }
 
-    return balanceData;
-}
+    const detail = res.data[0].details?.find(d => d.ccy === 'USDC');
+    const availBal = detail ? parseFloat(detail.availBal) : 0;
 
-module.exports = { getBalanceData }
+    // On retourne le même shape qu'avant pour ne pas casser les appelants.
+    // baseAsset.free = 0 : les perpétuels ne détiennent pas l'actif physique.
+    return {
+        quoteAsset: { free: availBal },
+        baseAsset: { free: 0 },
+    };
+};
+
+module.exports = { getBalanceData };

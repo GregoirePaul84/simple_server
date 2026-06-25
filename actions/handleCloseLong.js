@@ -1,6 +1,5 @@
 const { getGainMessage, getLossMessage } = require('../botmessages');
-const { getIsolatedMarginAccount } = require('../getIsolatedMarginAccount');
-// const { clearLongDust } = require('./clearLongDust');
+const { getBalanceData } = require('../getBalanceData');
 
 const handleCloseLong = async (
     symbol,
@@ -10,56 +9,34 @@ const handleCloseLong = async (
     initialCapital,
     profits,
     bot,
-    chatId,
-    // binanceMargin
+    chatId
 ) => {
-
-    console.log('DEBUG handleCloseLong inputs', {
-        symbol,
-        initialPrice,
-        executedPrice,
-        executedQuantity,
-    });
+    console.log('DEBUG handleCloseLong inputs', { symbol, initialPrice, executedPrice, executedQuantity });
 
     if (!initialPrice || !executedPrice || !executedQuantity) {
         console.error('Données manquantes pour calculer les profits ou pertes.');
-        bot.sendMessage(
-            chatId,
-            `✅ Long clôturé : Données manquantes pour calculer les profits ou pertes.`
-        );
+        bot.sendMessage(chatId, `✅ Long clôturé : Données manquantes pour calculer les profits ou pertes.`);
         return;
     }
 
-    // Récupération des balances actuelles après clôture potentielle (via OCO)
-    const marginAccount = await getIsolatedMarginAccount(
-        process.env.BINANCE_MARGIN_API_KEY,
-        process.env.BINANCE_MARGIN_API_SECRET
-    );
-
-    const assetsData = marginAccount.assets.find(asset => asset.symbol === `${symbol}`);
-
-    if (!assetsData) {
-        throw new Error(`Impossible de récupérer les données pour la paire ${symbol}.`);
-    }
-
-    const newUsdcBalance = parseFloat(assetsData.quoteAsset.free);
-    const newAssetBalance = parseFloat(assetsData.baseAsset.free);
+    const balanceData = await getBalanceData(symbol);
+    const newUsdcBalance = parseFloat(balanceData.quoteAsset.free);
 
     const profitOrLoss = ((executedPrice - initialPrice) * executedQuantity).toFixed(2);
     const profitPercentage = (((executedPrice - initialPrice) / initialPrice) * 100).toFixed(2);
 
     console.log(`Profit ou Perte : ${profitOrLoss} USDC, ${profitPercentage}%`);
 
-    profits.monthly += parseFloat(profitOrLoss);
+    profits.monthly    += parseFloat(profitOrLoss);
     profits.cumulative += parseFloat(profitOrLoss);
 
-    const totalProfitMonthlyPercentage = ((profits.monthly / initialCapital) * 100).toFixed(2);
+    const totalProfitMonthlyPercentage    = ((profits.monthly    / initialCapital) * 100).toFixed(2);
     const totalProfitCumulativePercentage = ((profits.cumulative / initialCapital) * 100).toFixed(2);
 
-    const minusOrPlusMonthly = profits.monthly >= 0 ? '+' : '';
+    const minusOrPlusMonthly    = profits.monthly    >= 0 ? '+' : '';
     const minusOrPlusCumulative = profits.cumulative >= 0 ? '+' : '';
 
-    if (profitOrLoss >= 0) {
+    if (parseFloat(profitOrLoss) >= 0) {
         bot.sendMessage(
             chatId,
             `✅ Long clôturé : PAYÉ ! 🤑🤑🤑🤑\n\n` +
@@ -68,7 +45,7 @@ const handleCloseLong = async (
             `- Pourcentage réalisé 📊 : +${profitPercentage} %\n\n` +
             `- Gains mensuels 💰 : ${minusOrPlusMonthly}${profits.monthly.toFixed(2)} USDC, ${minusOrPlusMonthly}${totalProfitMonthlyPercentage} %\n` +
             `- Gains totaux 💰💰 : ${minusOrPlusCumulative}${profits.cumulative.toFixed(2)} USDC, ${minusOrPlusCumulative}${totalProfitCumulativePercentage} %\n\n` +
-            `- Capital disponible 💎 : ${newUsdcBalance.toFixed(2)} USDC, ${newAssetBalance} ${symbol === 'BTCUSDC' ? 'BTC' : 'DOGE'}\n\n` +
+            `- Capital disponible 💎 : ${newUsdcBalance.toFixed(2)} USDC\n\n` +
             `💪 ${getGainMessage()}`
         );
     } else {
@@ -80,13 +57,10 @@ const handleCloseLong = async (
             `- Pourcentage réalisé 📊 : ${profitPercentage} %\n\n` +
             `- Gains mensuels 💰 : ${minusOrPlusMonthly}${profits.monthly.toFixed(2)} USDC, ${minusOrPlusMonthly}${totalProfitMonthlyPercentage} %\n` +
             `- Gains totaux 💰💰 : ${minusOrPlusCumulative}${profits.cumulative.toFixed(2)} USDC, ${minusOrPlusCumulative}${totalProfitCumulativePercentage} %\n\n` +
-            `- Capital disponible 💎 : ${newUsdcBalance.toFixed(2)} USDC, ${newAssetBalance} ${symbol === 'BTCUSDC' ? 'BTC' : 'DOGE'}\n\n` +
+            `- Capital disponible 💎 : ${newUsdcBalance.toFixed(2)} USDC\n\n` +
             `🧘 ${getLossMessage()}`
         );
     }
-
-    initialPrice = null;
 };
-
 
 module.exports = { handleCloseLong };
