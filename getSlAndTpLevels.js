@@ -12,7 +12,7 @@ function getSlAndTpLevels(type) {
 
     case "BTC_LONG_OKX":
       sl = 6.17;
-      tp = 8.72;
+      tp = 8.75;
       break;
 
     case "BTC_SHORT":
@@ -78,7 +78,7 @@ function getSlAndTpLevels(type) {
 
     case "DOGE_LONG_CROSSOVER":
       sl = 4.2;
-      tp = 5.2;
+      tp = 5.3;
       break;
 
     case "DOGE_LONG_REBOUND":
@@ -93,12 +93,12 @@ function getSlAndTpLevels(type) {
 
     case "DOGE_LONG_RANGE":
       sl = 2.0;
-      tp = 3.5;
+      tp = 4.0;
       break;
 
     case "DOGE_LONG_ZONE_LOW":
       sl = 1.5;
-      tp = 3.0;
+      tp = 3.2;
       break;
 
     case "DOGE_SHORT_CROSSUNDER":
@@ -108,7 +108,7 @@ function getSlAndTpLevels(type) {
 
     case "DOGE_SHORT_DUMP":
       sl = 3.0;
-      tp = 4.4;
+      tp = 4.5;
       break;
 
     case "DOGE_SHORT_CROSSUNDER_SMA":
@@ -117,7 +117,7 @@ function getSlAndTpLevels(type) {
       break;
 
     case "DOGE_SHORT_CONTINUED":
-      sl = 4.0;
+      sl = 4.7;
       tp = 5.7;
       break;
 

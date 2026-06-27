@@ -30,6 +30,12 @@ const totalCapital   = initialCapital * 2; // BTC + DOGE
 
 const symbols = ["BTC-USD_UM_XPERP-310404", "DOGE-USD_UM_XPERP-310404"];
 
+// Répartition du capital disponible par paire
+const CAPITAL_ALLOCATION = {
+    "BTC-USD_UM_XPERP-310404":  0.75,
+    "DOGE-USD_UM_XPERP-310404": 0.25,
+};
+
 const initialPrices = {
     "BTC-USD_UM_XPERP-310404":  null,
     "DOGE-USD_UM_XPERP-310404": null,
@@ -222,8 +228,9 @@ app.post("/webhook", async (req, res) => {
         // ****** GESTION POSITION LONGUE ****** //
         if (action === "LONG") {
             let balanceData  = await getBalanceData(symbol);
-            const usdcBalance = parseFloat(balanceData.quoteAsset.free);
-            console.log(`balance USDC avant position longue pour ${symbol} =>`, usdcBalance);
+            const totalBalance = parseFloat(balanceData.quoteAsset.free);
+            const usdcBalance  = totalBalance * CAPITAL_ALLOCATION[symbol];
+            console.log(`balance USDC avant position longue pour ${symbol} => total=${totalBalance.toFixed(2)}, alloué=${usdcBalance.toFixed(2)} (${CAPITAL_ALLOCATION[symbol]*100}%)`);
 
             const longOrder = await takeLongPosition(symbol, type, price, usdcBalance, bot, chatId);
 
@@ -242,8 +249,9 @@ app.post("/webhook", async (req, res) => {
         // ****** GESTION POSITION COURTE ****** //
         else if (action === "SHORT") {
             let balanceData   = await getBalanceData(symbol);
-            const usdcBalance = parseFloat(balanceData.quoteAsset.free);
-            console.log("balance USDC avant position courte =>", usdcBalance);
+            const totalBalance = parseFloat(balanceData.quoteAsset.free);
+            const usdcBalance  = totalBalance * CAPITAL_ALLOCATION[symbol];
+            console.log(`balance USDC avant position courte pour ${symbol} => total=${totalBalance.toFixed(2)}, alloué=${usdcBalance.toFixed(2)} (${CAPITAL_ALLOCATION[symbol]*100}%)`);
 
             const shortOrder = await takeShortPosition(symbol, type, price, usdcBalance, bot, chatId);
 
