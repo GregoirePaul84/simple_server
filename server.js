@@ -301,12 +301,17 @@ const runStartupChecks = async () => {
     for (const symbol of symbols) {
         const instrRes = await okxClient.getInstruments({ instType: 'FUTURES', instId: symbol });
         if (!instrRes.data || instrRes.data.length === 0) {
-            // Affiche les X-Perps disponibles pour trouver le bon ID
-            const allFutures = await okxClient.getInstruments({ instType: 'FUTURES', uly: symbol.split('-').slice(0, 2).join('-') });
-            const xperps = (allFutures.data || []).filter(i => i.instId.includes('XPERP'));
-            console.error(`❌ Instrument introuvable : "${symbol}"`);
-            console.error(`   X-Perps disponibles pour ${symbol.split('-').slice(0, 2).join('-')} :`, xperps.map(i => i.instId));
-            throw new Error(`Instrument "${symbol}" introuvable sur OKX EEA. Voir logs pour les IDs disponibles.`);
+            console.error(`❌ Instrument introuvable : "${symbol}" (code: ${instrRes.code}, msg: ${instrRes.msg})`);
+            // Tente de lister tous les FUTURES disponibles sur EEA pour diagnostic
+            try {
+                const allFutures = await okxClient.getInstruments({ instType: 'FUTURES' });
+                const xperps = (allFutures.data || []).filter(i => i.instId.includes('XPERP'));
+                console.error(`   X-Perps disponibles sur EEA :`, xperps.length ? xperps.map(i => i.instId) : '(aucun)');
+                console.error(`   Total FUTURES sur EEA : ${(allFutures.data || []).length}`);
+            } catch (diagErr) {
+                console.error(`   Impossible de lister les FUTURES disponibles :`, diagErr?.msg || diagErr?.message);
+            }
+            throw new Error(`Instrument "${symbol}" introuvable sur OKX EEA.`);
         }
         contractSizes[symbol] = parseFloat(instrRes.data[0].ctVal);
         console.log(`✅ ${symbol} ctVal = ${contractSizes[symbol]}`);
