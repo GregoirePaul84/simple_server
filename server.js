@@ -327,7 +327,8 @@ const init = async () => {
     try {
         await runStartupChecks();
     } catch (err) {
-        console.error("❌ Echec des tests de santé au démarrage :", err.message);
+        console.error("❌ Echec des tests de santé au démarrage :", err?.message || JSON.stringify(err));
+        console.error("   Détail complet :", err);
         console.error("⚠️  Le serveur démarre quand même, mais des fonctionnalités peuvent être indisponibles.");
     }
 
