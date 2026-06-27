@@ -4,7 +4,7 @@ const MIN_NOTIONAL_USD = 10;
 
 async function getPositionStatus(symbol) {
     const okxClient = getOkxClient();
-    const res = await okxClient.getPositions({ instType: 'SWAP', instId: symbol });
+    const res = await okxClient.getPositions({ instType: 'FUTURES', instId: symbol });
 
     if (!res.data || res.data.length === 0) {
         return { hasOpenPosition: false, hasLong: false, hasShort: false, longNotional: 0, shortNotional: 0 };

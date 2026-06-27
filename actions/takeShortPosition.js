@@ -12,7 +12,7 @@ const takeShortPosition = async (symbol, type, price, usdcBalance, bot, chatId) 
     const okxClient = getOkxClient();
 
     // Specs de l'instrument
-    const instrRes = await okxClient.getInstruments({ instType: 'SWAP', instId: symbol });
+    const instrRes = await okxClient.getInstruments({ instType: 'FUTURES', instId: symbol });
     const inst = instrRes.data[0];
     const ctVal = parseFloat(inst.ctVal);
     const lotSz = parseFloat(inst.lotSz);

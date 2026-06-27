@@ -2,9 +2,9 @@ const { WebsocketClient } = require('okx-api');
 
 /**
  * Crée et retourne un WebsocketClient OKX abonné au canal privé 'orders'
- * pour les instruments SWAP listés dans `symbols`.
+ * pour les instruments FUTURES (X-Perp) listés dans `symbols`.
  *
- * @param {string[]} symbols  - ex: ['BTC-USDC-SWAP', 'DOGE-USDC-SWAP']
+ * @param {string[]} symbols  - ex: ['BTC-USD_UM_XPERP-310404', 'DOGE-USD_UM_XPERP-310404']
  * @param {Function} onOrderFill - callback({ instId, side, avgPx, accFillSz, algoId })
  * @param {object}   bot     - instance Telegram pour les notifications de reconnexion
  * @param {string}   chatId
@@ -18,10 +18,10 @@ function createOkxWebSocket({ symbols, onOrderFill, bot, chatId }) {
         market:    'EEA',  // wss://wseea.okx.com:8443/ws/v5/private
     });
 
-    // Souscription canal privé 'orders' pour chaque symbol SWAP
+    // Souscription canal privé 'orders' pour chaque symbol FUTURES (X-Perp)
     const subscriptions = symbols.map(instId => ({
         channel:  'orders',
-        instType: 'SWAP',
+        instType: 'FUTURES',
         instId,
     }));
 

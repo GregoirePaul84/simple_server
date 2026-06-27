@@ -16,9 +16,9 @@ const sendMonthlyReport = (
         // Rapport positif
         const positiveMessage = 
         `📅 Rapport mensuel : PAYÉ ! 🎉\n\n` +
-        `- Gains totaux mensuels 💰 : ${totalProfitMonthly.toFixed(2)} USDT\n` +
+        `- Gains totaux mensuels 💰 : ${totalProfitMonthly.toFixed(2)} USDC\n` +
         `- Pourcentage de gains mensuel 📊 : ${monthlyProfitPercentage} %\n\n` +
-        `- Gains totaux cumulés 💰💰 : ${totalProfitCumulative.toFixed(2)} USDT\n` +
+        `- Gains totaux cumulés 💰💰 : ${totalProfitCumulative.toFixed(2)} USDC\n` +
         `- Pourcentage total 📊📊 : ${totalProfitPercentage} %\n\n` +
         `🚀🚀🚀🚀 To the moon ! 🚀🚀🚀🚀`;
         bot.sendSticker(chatId, 'CAACAgIAAxkBAAMQZ0CkvHDQI7qo2-cLGyAtzSrpxw4AAioAA8GcYAwjxoukwOqqDDYE')
@@ -27,9 +27,9 @@ const sendMonthlyReport = (
         // Rapport négatif
         const negativeMessage = 
         `📅 Rapport mensuel : Pas payé. 😔\n\n` +
-        `- Pertes totales mensuelles 💰 : ${Math.abs(totalProfitMonthly).toFixed(2)} USDT\n` +
+        `- Pertes totales mensuelles 💰 : ${Math.abs(totalProfitMonthly).toFixed(2)} USDC\n` +
         `- Pourcentage de pertes mensuel 📊 : ${Math.abs(totalProfitPercentage)} %\n\n` +
-        `- Gains totaux cumulés 💰💰 : ${totalProfitCumulative.toFixed(2)} USDT\n` +
+        `- Gains totaux cumulés 💰💰 : ${totalProfitCumulative.toFixed(2)} USDC\n` +
         `- Pourcentage total 📊📊 : ${totalProfitPercentage} %\n\n` +
         `🧘‍♂️🧘‍♂️🧘‍♂️🧘‍♂️ Gardons confiance, la stratégie est bonne ! 🧘‍♂️🧘‍♂️🧘‍♂️🧘‍♂️`;
         bot.sendSticker(chatId, 'CAACAgIAAxkBAAMRZ0Ck60klGlUzTX4YoMtWjik8f-oAAi0AA8GcYAzjNPIncv-QZTYE'); 

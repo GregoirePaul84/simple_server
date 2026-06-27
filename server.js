@@ -28,21 +28,21 @@ app.use(bodyParser.json());
 const initialCapital = 2000; // Capital initial par actif en USDC
 const totalCapital   = initialCapital * 2; // BTC + DOGE
 
-const symbols = ["BTC-USDC-SWAP", "DOGE-USDC-SWAP"];
+const symbols = ["BTC-USD_UM_XPERP-310404", "DOGE-USD_UM_XPERP-310404"];
 
 const initialPrices = {
-    "BTC-USDC-SWAP":  null,
-    "DOGE-USDC-SWAP": null,
+    "BTC-USD_UM_XPERP-310404":  null,
+    "DOGE-USD_UM_XPERP-310404": null,
 };
 const profits = {
-    "BTC-USDC-SWAP":  { monthly: 0, cumulative: 0 },
-    "DOGE-USDC-SWAP": { monthly: 0, cumulative: 0 },
+    "BTC-USD_UM_XPERP-310404":  { monthly: 0, cumulative: 0 },
+    "DOGE-USD_UM_XPERP-310404": { monthly: 0, cumulative: 0 },
 };
 
 // Taille de contrat par symbol — peuplée au startup depuis getInstruments
 const contractSizes = {
-    "BTC-USDC-SWAP":  null,
-    "DOGE-USDC-SWAP": null,
+    "BTC-USD_UM_XPERP-310404":  null,
+    "DOGE-USD_UM_XPERP-310404": null,
 };
 
 // Lock anti double traitement, un par symbole
@@ -114,8 +114,8 @@ const startUserWebSocket = () => {
 
 // Setter pour réinitialiser les profits mensuels
 const resetMonthlyProfit = () => {
-    profits["BTC-USDC-SWAP"].monthly  = 0;
-    profits["DOGE-USDC-SWAP"].monthly = 0;
+    profits["BTC-USD_UM_XPERP-310404"].monthly  = 0;
+    profits["DOGE-USD_UM_XPERP-310404"].monthly = 0;
     console.log("Profit mensuel réinitialisé.");
 };
 
@@ -147,16 +147,16 @@ app.get("/test-monthly-report", (_, res) => {
     sendMonthlyReport(
         bot,
         chatId,
-        profits["BTC-USDC-SWAP"].cumulative + profits["DOGE-USDC-SWAP"].cumulative,
+        profits["BTC-USD_UM_XPERP-310404"].cumulative + profits["DOGE-USD_UM_XPERP-310404"].cumulative,
         totalCapital,
-        profits["BTC-USDC-SWAP"].monthly + profits["DOGE-USDC-SWAP"].monthly
+        profits["BTC-USD_UM_XPERP-310404"].monthly + profits["DOGE-USD_UM_XPERP-310404"].monthly
     );
     res.status(200).send("Rapport mensuel envoyé (test).");
 });
 
 app.get("/balance", async (_, res) => {
     try {
-        const data = await getBalanceData("BTC-USDC-SWAP");
+        const data = await getBalanceData("BTC-USD_UM_XPERP-310404");
         res.status(200).json({
             message:      "Solde OKX récupéré avec succès",
             usdcBalance:  data.quoteAsset.free,
@@ -174,6 +174,14 @@ app.post("/webhook", async (req, res) => {
     if (key !== process.env.WEBHOOK_SECRET) {
         console.log("clé secrète incorrecte");
         return res.status(401).send("Clé secrète incorrecte.");
+    }
+
+    // Rejet immédiat si le symbole ne correspond pas exactement à un instrument connu
+    // (protège contre les typos TradingView, ex: tiret au lieu d'underscore dans UM_XPERP)
+    if (!symbols.includes(symbol)) {
+        console.warn(`⛔ Symbole inconnu reçu : "${symbol}". Attendu : ${symbols.join(' | ')}`);
+        await bot.sendMessage(chatId, `⛔ Webhook rejeté : symbole inconnu "${symbol}"\nAttendus : ${symbols.join(', ')}`);
+        return res.status(400).send(`Symbole non supporté : ${symbol}`);
     }
 
     if (webhookProcessing.get(symbol)) {
@@ -289,11 +297,15 @@ const runStartupChecks = async () => {
     await okxClient.getAccountBalance({ ccy: 'USDC' });
     console.log("✅ Clé API OKX valide");
 
-    // 4. Récupère les tailles de contrat pour chaque symbol
+    // 4. Récupère les tailles de contrat et impose le levier x1 pour chaque symbol
     for (const symbol of symbols) {
-        const instrRes = await okxClient.getInstruments({ instType: 'SWAP', instId: symbol });
+        const instrRes = await okxClient.getInstruments({ instType: 'FUTURES', instId: symbol });
         contractSizes[symbol] = parseFloat(instrRes.data[0].ctVal);
         console.log(`✅ ${symbol} ctVal = ${contractSizes[symbol]}`);
+
+        // Impose levier x1 en isolated pour ne pas trader avec levier involontaire
+        await okxClient.setLeverage({ instId: symbol, lever: '1', mgnMode: 'isolated' });
+        console.log(`✅ ${symbol} levier x1 isolated confirmé`);
     }
 
     // 5. Telegram bot
@@ -315,8 +327,8 @@ const init = async () => {
     scheduleMonthlyReport(
         bot,
         chatId,
-        () => profits["BTC-USDC-SWAP"].cumulative + profits["DOGE-USDC-SWAP"].cumulative,
-        () => profits["BTC-USDC-SWAP"].monthly     + profits["DOGE-USDC-SWAP"].monthly,
+        () => profits["BTC-USD_UM_XPERP-310404"].cumulative + profits["DOGE-USD_UM_XPERP-310404"].cumulative,
+        () => profits["BTC-USD_UM_XPERP-310404"].monthly     + profits["DOGE-USD_UM_XPERP-310404"].monthly,
         resetMonthlyProfit,
         totalCapital
     );

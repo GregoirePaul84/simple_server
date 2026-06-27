@@ -10,7 +10,17 @@ function getSlAndTpLevels(type) {
       tp = 8.72;
       break;
 
+    case "BTC_LONG_OKX":
+      sl = 6.17;
+      tp = 8.72;
+      break;
+
     case "BTC_SHORT":
+      sl = 5.24;
+      tp = 8.91;
+      break;
+
+    case "BTC_SHORT_OKX":
       sl = 5.24;
       tp = 8.94;
       break;
