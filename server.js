@@ -300,6 +300,14 @@ const runStartupChecks = async () => {
     // 4. Récupère les tailles de contrat et impose le levier x1 pour chaque symbol
     for (const symbol of symbols) {
         const instrRes = await okxClient.getInstruments({ instType: 'FUTURES', instId: symbol });
+        if (!instrRes.data || instrRes.data.length === 0) {
+            // Affiche les X-Perps disponibles pour trouver le bon ID
+            const allFutures = await okxClient.getInstruments({ instType: 'FUTURES', uly: symbol.split('-').slice(0, 2).join('-') });
+            const xperps = (allFutures.data || []).filter(i => i.instId.includes('XPERP'));
+            console.error(`❌ Instrument introuvable : "${symbol}"`);
+            console.error(`   X-Perps disponibles pour ${symbol.split('-').slice(0, 2).join('-')} :`, xperps.map(i => i.instId));
+            throw new Error(`Instrument "${symbol}" introuvable sur OKX EEA. Voir logs pour les IDs disponibles.`);
+        }
         contractSizes[symbol] = parseFloat(instrRes.data[0].ctVal);
         console.log(`✅ ${symbol} ctVal = ${contractSizes[symbol]}`);
 
