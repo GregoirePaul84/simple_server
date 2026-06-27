@@ -311,9 +311,16 @@ const runStartupChecks = async () => {
         contractSizes[symbol] = parseFloat(instrRes.data[0].ctVal);
         console.log(`✅ ${symbol} ctVal = ${contractSizes[symbol]}`);
 
-        // Impose levier x1 en isolated pour ne pas trader avec levier involontaire
-        await okxClient.setLeverage({ instId: symbol, lever: '1', mgnMode: 'isolated' });
-        console.log(`✅ ${symbol} levier x1 isolated confirmé`);
+        // Tente d'imposer levier x1 — les X-Perps peuvent ne pas supporter setLeverage
+        for (const mgnMode of ['isolated', 'cross']) {
+            try {
+                await okxClient.setLeverage({ instId: symbol, lever: '1', mgnMode });
+                console.log(`✅ ${symbol} levier x1 ${mgnMode} confirmé`);
+                break;
+            } catch (e) {
+                console.warn(`⚠️  setLeverage ${mgnMode} pour ${symbol} : ${e?.msg || e?.message || JSON.stringify(e)}`);
+            }
+        }
     }
 
     // 5. Telegram bot
