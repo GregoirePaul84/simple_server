@@ -294,7 +294,7 @@ const runStartupChecks = async () => {
     console.log("✅ OKX API accessible");
 
     // 3. Clé API OKX valide (balance)
-    await okxClient.getAccountBalance({ ccy: 'USDC' });
+    await okxClient.getBalance({ ccy: 'USDC' });
     console.log("✅ Clé API OKX valide");
 
     // 4. Récupère les tailles de contrat et impose le levier x1 pour chaque symbol

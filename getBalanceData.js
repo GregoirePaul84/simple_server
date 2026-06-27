@@ -4,7 +4,7 @@ const getBalanceData = async (symbol) => {
     console.log(`Récup de la balance pour ${symbol}`);
 
     const okxClient = getOkxClient();
-    const res = await okxClient.getAccountBalance({ ccy: 'USDC' });
+    const res = await okxClient.getBalance({ ccy: 'USDC' });
 
     if (!res.data || res.data.length === 0) {
         throw new Error('Impossible de récupérer la balance OKX.');
