@@ -12,10 +12,12 @@ const { WebsocketClient } = require('okx-api');
  */
 function createOkxWebSocket({ symbols, onOrderFill, bot, chatId }) {
     const wsClient = new WebsocketClient({
-        apiKey:    process.env.OKX_API_KEY,
-        apiSecret: process.env.OKX_API_SECRET,
-        apiPass:   process.env.OKX_PASSPHRASE,
-        market:    'EEA',  // wss://wseea.okx.com:8443/ws/v5/private
+        market: 'EEA',  // wss://wseea.okx.com:8443/ws/v5/private
+        accounts: [{
+            apiKey:    process.env.OKX_API_KEY,
+            apiSecret: process.env.OKX_API_SECRET,
+            apiPass:   process.env.OKX_PASSPHRASE,
+        }],
     });
 
     // Souscription canal privé 'orders' pour chaque symbol FUTURES (X-Perp)
