@@ -6,11 +6,11 @@ const getBalanceData = async (symbol) => {
     const okxClient = getOkxClient();
     const res = await okxClient.getBalance({ ccy: 'USDC' });
 
-    if (!res.data || res.data.length === 0) {
+    if (!res || res.length === 0) {
         throw new Error('Impossible de récupérer la balance OKX.');
     }
 
-    const detail = res.data[0].details?.find(d => d.ccy === 'USDC');
+    const detail = res[0].details?.find(d => d.ccy === 'USDC');
     const availBal = detail ? parseFloat(detail.availBal) : 0;
 
     // On retourne le même shape qu'avant pour ne pas casser les appelants.

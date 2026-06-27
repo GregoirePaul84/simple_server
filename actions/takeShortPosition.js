@@ -13,7 +13,7 @@ const takeShortPosition = async (symbol, type, price, usdcBalance, bot, chatId) 
 
     // Specs de l'instrument
     const instrRes = await okxClient.getInstruments({ instType: 'FUTURES', instId: symbol });
-    const inst = instrRes.data[0];
+    const inst = instrRes[0];
     const ctVal = parseFloat(inst.ctVal);
     const lotSz = parseFloat(inst.lotSz);
 
@@ -38,16 +38,16 @@ const takeShortPosition = async (symbol, type, price, usdcBalance, bot, chatId) 
         sz:      String(contractQty),
     });
 
-    if (orderRes.data?.[0]?.sCode !== '0') {
-        throw new Error(`Erreur placeOrder OKX short : ${orderRes.data?.[0]?.sMsg || JSON.stringify(orderRes)}`);
+    if (orderRes?.[0]?.sCode !== '0') {
+        throw new Error(`Erreur placeOrder OKX short : ${orderRes?.[0]?.sMsg || JSON.stringify(orderRes)}`);
     }
 
-    const orderId = orderRes.data[0].ordId;
+    const orderId = orderRes[0].ordId;
     console.log('📈 Short ouvert, orderId :', orderId);
 
     // Récupère le prix d'exécution moyen
     const detailRes = await okxClient.getOrderDetails({ instId: symbol, ordId: orderId });
-    const entry = parseFloat(detailRes.data?.[0]?.avgPx) || price;
+    const entry = parseFloat(detailRes?.[0]?.avgPx) || price;
     console.log(`Prix d'entrée short : ${entry}`);
 
     const slTp = getSlAndTpLevels(type);

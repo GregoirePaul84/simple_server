@@ -198,7 +198,7 @@ app.post("/webhook", async (req, res) => {
         // Prix actuel via ticker OKX
         const okxClient = getOkxClient();
         const tickerRes = await okxClient.getTicker({ instId: symbol });
-        const price     = parseFloat(tickerRes.data[0].last);
+        const price     = parseFloat(tickerRes[0].last);
         console.log(`Prix actuel de l'actif pour ${symbol} => ${price} USDC`);
 
         // Vérifier s'il y a déjà une position ouverte
@@ -300,21 +300,10 @@ const runStartupChecks = async () => {
     // 4. Récupère les tailles de contrat et impose le levier x1 pour chaque symbol
     for (const symbol of symbols) {
         const instrRes = await okxClient.getInstruments({ instType: 'FUTURES', instId: symbol });
-        if (!instrRes.data || instrRes.data.length === 0) {
-            console.error(`❌ Instrument introuvable : "${symbol}" (code: ${instrRes.code}, msg: ${instrRes.msg})`);
-            // Tente de lister tous les FUTURES disponibles sur EEA pour diagnostic
-            try {
-                for (const instType of ['FUTURES', 'SWAP', 'SPOT', 'OPTION']) {
-                    const res = await okxClient.getInstruments({ instType });
-                    const xperps = (res.data || []).filter(i => i.instId.includes('XPERP'));
-                    console.error(`   [${instType}] total=${(res.data||[]).length}, X-Perps=${xperps.length ? xperps.map(i=>i.instId).join(', ') : '(aucun)'}`);
-                }
-            } catch (diagErr) {
-                console.error(`   Erreur diagnostic instTypes :`, diagErr?.msg || diagErr?.message || JSON.stringify(diagErr));
-            }
+        if (!instrRes || instrRes.length === 0) {
             throw new Error(`Instrument "${symbol}" introuvable sur OKX EEA.`);
         }
-        contractSizes[symbol] = parseFloat(instrRes.data[0].ctVal);
+        contractSizes[symbol] = parseFloat(instrRes[0].ctVal);
         console.log(`✅ ${symbol} ctVal = ${contractSizes[symbol]}`);
 
         // Tente d'imposer levier x1 — les X-Perps peuvent ne pas supporter setLeverage

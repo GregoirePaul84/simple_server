@@ -15,7 +15,7 @@ const placeOCOOrder = async (symbol, type, side, price, assetsAvailable, bot, ch
 
         // Specs de l'instrument
         const instrRes = await okxClient.getInstruments({ instType: 'FUTURES', instId: symbol });
-        const inst = instrRes.data[0];
+        const inst = instrRes[0];
         const ctVal  = parseFloat(inst.ctVal);
         const lotSz  = parseFloat(inst.lotSz);
         const tickSz = parseFloat(inst.tickSz);
@@ -62,11 +62,11 @@ const placeOCOOrder = async (symbol, type, side, price, assetsAvailable, bot, ch
             reduceOnly:   'true',
         });
 
-        if (algoRes.data?.[0]?.sCode !== '0') {
-            throw new Error(`Erreur placeAlgoOrder OKX : ${algoRes.data?.[0]?.sMsg || JSON.stringify(algoRes)}`);
+        if (algoRes?.[0]?.sCode !== '0') {
+            throw new Error(`Erreur placeAlgoOrder OKX : ${algoRes?.[0]?.sMsg || JSON.stringify(algoRes)}`);
         }
 
-        console.log('Ordre OCO OKX passé avec succès :', algoRes.data[0]);
+        console.log('Ordre OCO OKX passé avec succès :', algoRes[0]);
 
         bot.sendMessage(
             chatId,
