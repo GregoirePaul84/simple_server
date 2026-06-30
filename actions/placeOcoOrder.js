@@ -51,7 +51,7 @@ const placeOCOOrder = async (symbol, type, side, price, assetsAvailable, bot, ch
         // Algo ordre OCO OKX — clôture uniquement (reduceOnly)
         const algoRes = await okxClient.placeAlgoOrder({
             instId:       symbol,
-            tdMode:       'isolated',
+            tdMode:       'cross',
             side:         closeSide,
             ordType:      'oco',
             sz:           String(finalContracts),

@@ -38,7 +38,7 @@ const takeLongPosition = async (symbol, type, price, usdcBalance, bot, chatId) =
     // Ordre MARKET long en mode isolated, levier x1
     const orderRes = await okxClient.submitOrder({
         instId:  symbol,
-        tdMode:  'isolated',
+        tdMode:  'cross',
         side:    'buy',
         ordType: 'market',
         sz:      String(contractQty),

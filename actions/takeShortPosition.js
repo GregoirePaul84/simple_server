@@ -32,7 +32,7 @@ const takeShortPosition = async (symbol, type, price, usdcBalance, bot, chatId) 
     // Ordre MARKET short en mode isolated
     const orderRes = await okxClient.submitOrder({
         instId:  symbol,
-        tdMode:  'isolated',
+        tdMode:  'cross',
         side:    'sell',
         ordType: 'market',
         sz:      String(contractQty),
