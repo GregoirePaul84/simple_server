@@ -315,10 +315,10 @@ const runStartupChecks = async () => {
         console.log(`✅ ${symbol} ctVal = ${contractSizes[symbol]}`);
 
         // Impose levier x1 cross — X-Perps utilisent instFamily (pas instId) pour setLeverage
-        const instFamily = instrRes[0].instFamily; // ex: 'BTC-USD_UM_XPERP'
         const leverParams = [
-            { instFamily, lever: '1', mgnMode: 'cross' },
-            { instId: symbol, lever: '1', mgnMode: 'cross' },
+            { instId: symbol,   lever: '1', mgnMode: 'cross' },
+            { ccy: 'USDC',      lever: '1', mgnMode: 'cross' },
+            { ccy: 'USD',       lever: '1', mgnMode: 'cross' },
         ];
         let leverSet = false;
         for (const params of leverParams) {
