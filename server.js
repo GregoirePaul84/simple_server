@@ -314,15 +314,25 @@ const runStartupChecks = async () => {
         contractSizes[symbol] = parseFloat(instrRes[0].ctVal);
         console.log(`✅ ${symbol} ctVal = ${contractSizes[symbol]}`);
 
-        // Tente d'imposer levier x1 — les X-Perps peuvent ne pas supporter setLeverage
-        for (const mgnMode of ['isolated', 'cross']) {
+        // Impose levier x1 cross — X-Perps utilisent instFamily (pas instId) pour setLeverage
+        const instFamily = instrRes[0].instFamily; // ex: 'BTC-USD_UM_XPERP'
+        const leverParams = [
+            { instFamily, lever: '1', mgnMode: 'cross' },
+            { instId: symbol, lever: '1', mgnMode: 'cross' },
+        ];
+        let leverSet = false;
+        for (const params of leverParams) {
             try {
-                await okxClient.setLeverage({ instId: symbol, lever: '1', mgnMode });
-                console.log(`✅ ${symbol} levier x1 ${mgnMode} confirmé`);
+                await okxClient.setLeverage(params);
+                console.log(`✅ ${symbol} levier x1 cross confirmé (params: ${JSON.stringify(params)})`);
+                leverSet = true;
                 break;
             } catch (e) {
-                console.warn(`⚠️  setLeverage ${mgnMode} pour ${symbol} : ${e?.msg || e?.message || JSON.stringify(e)}`);
+                console.warn(`⚠️  setLeverage échoué (${JSON.stringify(params)}) : ${e?.msg || e?.message || JSON.stringify(e)}`);
             }
+        }
+        if (!leverSet) {
+            console.warn(`⚠️  Impossible de définir le levier x1 pour ${symbol} — vérifie manuellement dans l'interface OKX.`);
         }
     }
 
