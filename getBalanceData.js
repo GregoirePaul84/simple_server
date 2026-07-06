@@ -12,11 +12,11 @@ const getBalanceData = async (symbol) => {
 
     const detail = res[0].details?.find(d => d.ccy === 'USDC');
     const availBal = detail ? parseFloat(detail.availBal) : 0;
+    // eq = solde libre + positions bloquées + P&L latent — capital réel total
+    const totalEq  = detail ? parseFloat(detail.eq)       : availBal;
 
-    // On retourne le même shape qu'avant pour ne pas casser les appelants.
-    // baseAsset.free = 0 : les perpétuels ne détiennent pas l'actif physique.
     return {
-        quoteAsset: { free: availBal },
+        quoteAsset: { free: availBal, totalEq },
         baseAsset: { free: 0 },
     };
 };

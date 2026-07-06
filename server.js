@@ -227,10 +227,12 @@ app.post("/webhook", async (req, res) => {
 
         // ****** GESTION POSITION LONGUE ****** //
         if (action === "LONG") {
-            let balanceData  = await getBalanceData(symbol);
-            const totalBalance = parseFloat(balanceData.quoteAsset.free);
-            const usdcBalance  = totalBalance * CAPITAL_ALLOCATION[symbol];
-            console.log(`balance USDC avant position longue pour ${symbol} => total=${totalBalance.toFixed(2)}, alloué=${usdcBalance.toFixed(2)} (${CAPITAL_ALLOCATION[symbol]*100}%)`);
+            let balanceData        = await getBalanceData(symbol);
+            const availableBalance = parseFloat(balanceData.quoteAsset.free);
+            const totalEquity      = balanceData.quoteAsset.totalEq;
+            const targetAllocation = totalEquity * CAPITAL_ALLOCATION[symbol];
+            const usdcBalance      = Math.min(targetAllocation, availableBalance);
+            console.log(`[LONG ${symbol}] equity=${totalEquity.toFixed(2)} USDC, cible=${targetAllocation.toFixed(2)} (${CAPITAL_ALLOCATION[symbol]*100}%), disponible=${availableBalance.toFixed(2)}, utilisé=${usdcBalance.toFixed(2)}`);
 
             const longOrder = await takeLongPosition(symbol, type, price, usdcBalance, bot, chatId);
 
@@ -248,10 +250,12 @@ app.post("/webhook", async (req, res) => {
 
         // ****** GESTION POSITION COURTE ****** //
         else if (action === "SHORT") {
-            let balanceData   = await getBalanceData(symbol);
-            const totalBalance = parseFloat(balanceData.quoteAsset.free);
-            const usdcBalance  = totalBalance * CAPITAL_ALLOCATION[symbol];
-            console.log(`balance USDC avant position courte pour ${symbol} => total=${totalBalance.toFixed(2)}, alloué=${usdcBalance.toFixed(2)} (${CAPITAL_ALLOCATION[symbol]*100}%)`);
+            let balanceData        = await getBalanceData(symbol);
+            const availableBalance = parseFloat(balanceData.quoteAsset.free);
+            const totalEquity      = balanceData.quoteAsset.totalEq;
+            const targetAllocation = totalEquity * CAPITAL_ALLOCATION[symbol];
+            const usdcBalance      = Math.min(targetAllocation, availableBalance);
+            console.log(`[SHORT ${symbol}] equity=${totalEquity.toFixed(2)} USDC, cible=${targetAllocation.toFixed(2)} (${CAPITAL_ALLOCATION[symbol]*100}%), disponible=${availableBalance.toFixed(2)}, utilisé=${usdcBalance.toFixed(2)}`);
 
             const shortOrder = await takeShortPosition(symbol, type, price, usdcBalance, bot, chatId);
 
