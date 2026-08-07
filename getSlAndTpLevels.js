@@ -101,6 +101,11 @@ function getSlAndTpLevels(type) {
       tp = 3.2;
       break;
 
+    case "DOGE_LONG_RANGE_BOTTOM":
+      sl = 1.8;
+      tp = 2.5;
+      break;
+
     case "DOGE_SHORT_CROSSUNDER":
       sl = 4.5;
       tp = 4.8;
@@ -124,6 +129,11 @@ function getSlAndTpLevels(type) {
     case "DOGE_SHORT_RARE_PANIC":
       sl = 3.5;
       tp = 10.0;
+      break;
+
+    case "DOGE_SHORT_RANGE":
+      sl = 1.8;
+      tp = 2.5;
       break;
 
     default:
