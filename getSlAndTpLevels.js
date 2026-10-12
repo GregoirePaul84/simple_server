@@ -66,34 +66,36 @@ function getSlAndTpLevels(type) {
       tp = 8.0;
       break;
 
-    case "DOGE_SHORT_SMALL_ZONE":
-      sl = 3.4;
-      tp = 3.8;
-      break;
-
     case "DOGE_SHORT_DEAD_ZONE":
       sl = 2.0;
       tp = 4.2;
       break;
+
+    case "DOGE_SHORT_CROSSUNDER_SMA":
+      sl = 2.5;
+      tp = 5.4;
+      break;
+
+    // OKX
 
     case "DOGE_LONG_CROSSOVER":
       sl = 4.2;
       tp = 5.3;
       break;
 
+    case "DOGE_LONG_RANGE":
+      sl = 2.0;
+      tp = 4.0;
+      break;
+
     case "DOGE_LONG_REBOUND":
       sl = 5.0;
-      tp = 5.0;
+      tp = 5.5;
       break;
 
     case "DOGE_LONG_TAKE_OFF":
       sl = 4.8;
-      tp = 5.4;
-      break;
-
-    case "DOGE_LONG_RANGE":
-      sl = 2.0;
-      tp = 4.0;
+      tp = 6.8;
       break;
 
     case "DOGE_LONG_ZONE_LOW":
@@ -107,28 +109,28 @@ function getSlAndTpLevels(type) {
       break;
 
     case "DOGE_SHORT_CROSSUNDER":
-      sl = 4.5;
+      sl = 4.3;
       tp = 4.8;
       break;
 
     case "DOGE_SHORT_DUMP":
       sl = 3.0;
-      tp = 4.5;
-      break;
-
-    case "DOGE_SHORT_CROSSUNDER_SMA":
-      sl = 2.5;
-      tp = 5.4;
+      tp = 6.0;
       break;
 
     case "DOGE_SHORT_CONTINUED":
-      sl = 4.7;
-      tp = 5.7;
+      sl = 3.5;
+      tp = 5.5;
       break;
 
     case "DOGE_SHORT_RARE_PANIC":
       sl = 3.5;
       tp = 10.0;
+      break;
+
+    case "DOGE_SHORT_SMALL_ZONE":
+      sl = 3.4;
+      tp = 3.8;
       break;
 
     case "DOGE_SHORT_RANGE":
